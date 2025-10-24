@@ -6,7 +6,9 @@ import time
 import urllib.parse
 from typing import Dict, Iterator, List, Optional
 
+
 import requests
+
 
 
 APPLIST_URL = "https://api.steampowered.com/ISteamApps/GetAppList/v2/"
@@ -16,8 +18,10 @@ REVIEWS_OUT = "data/reviews.jsonl"
 CHECKPOINT_FILE = "data/checkpoint.json"
 
 
+
 def ensure_dirs():
     os.makedirs("data", exist_ok=True)
+
 
 
 def get_app_list(session: requests.Session) -> List[Dict]:
@@ -29,6 +33,7 @@ def get_app_list(session: requests.Session) -> List[Dict]:
     data = resp.json()
     apps = data.get("applist", {}).get("apps", [])
     return apps
+
 
 
 def iter_app_reviews(
@@ -52,6 +57,7 @@ def iter_app_reviews(
     seen_cursors = set()
     count = 0
 
+
     while True:
         params = {
             "json": 1,
@@ -62,12 +68,15 @@ def iter_app_reviews(
             "num_per_page": num_per_page,
         }
 
+
         if day_range is not None:
             params["day_range"] = day_range
+
 
         # Steam defaults to filtering off-topic activity; toggle to include or exclude
         # 0 = include off-topic activity, 1 = filter it out (naming is counterintuitive)
         params["filter_offtopic_activity"] = 0 if include_offtopic else 1
+
 
         # Cursor must be URL-encoded except for the initial '*'
         if cursor != "*":
@@ -75,8 +84,10 @@ def iter_app_reviews(
         else:
             enc_cursor = cursor
 
+
         params["cursor"] = enc_cursor
         url = f"{APPREVIEWS_URL_TMPL.format(appid=appid)}"
+
 
         try:
             r = session.get(url, params=params, timeout=30)
@@ -97,11 +108,14 @@ def iter_app_reviews(
                 # Give up on this appid page
                 return
 
+
         reviews = payload.get("reviews", [])
         next_cursor = payload.get("cursor")
 
+
         if not reviews:
             return
+
 
         for rev in reviews:
             rev["__appid"] = appid  # annotate to keep app context
@@ -110,12 +124,15 @@ def iter_app_reviews(
             if max_reviews is not None and count >= max_reviews:
                 return
 
+
         if not next_cursor or next_cursor in seen_cursors:
             return
+
 
         seen_cursors.add(next_cursor)
         cursor = next_cursor
         time.sleep(delay_sec)
+
 
 
 def load_checkpoint() -> Dict:
@@ -125,9 +142,11 @@ def load_checkpoint() -> Dict:
     return {"last_app_index": -1}
 
 
+
 def save_checkpoint(state: Dict):
     with open(CHECKPOINT_FILE, "w", encoding="utf-8") as f:
         json.dump(state, f)
+
 
 
 def main():
@@ -144,12 +163,16 @@ def main():
     parser.add_argument("--resume", action="store_true", help="Resume from last checkpoint (by app index).")
     parser.add_argument("--out", type=str, default=REVIEWS_OUT, help="Output JSONL file path.")
     parser.add_argument("--applist-out", type=str, default=APPLIST_OUT, help="App list JSON path.")
+    parser.add_argument("--skip-no-reviews", action="store_true", default=True, help="Skip apps with 0 reviews (default: True).")
     args = parser.parse_args()
+
 
     ensure_dirs()
 
+
     session = requests.Session()
     session.headers.update({"User-Agent": "steam-reviews-collector/1.0"})
+
 
     # Fetch or load app list
     if os.path.exists(args.applist_out):
@@ -160,17 +183,21 @@ def main():
         with open(args.applist_out, "w", encoding="utf-8") as f:
             json.dump(apps, f)
 
+
     # Optional resume
     start_index = 0
     if args.resume:
         state = load_checkpoint()
         start_index = max(0, state.get("last_app_index", -1) + 1)
 
+
     # Iterate apps and collect reviews
     processed = 0
+    skipped = 0
     total_apps = len(apps)
     print(f"Apps available: {total_apps}")
     print(f"Starting from index: {start_index}")
+
 
     # Open output in append mode for resumability
     with open(args.out, "a", encoding="utf-8") as out_f:
@@ -181,7 +208,9 @@ def main():
             if not appid:
                 continue
 
+
             print(f"[{i}] AppID={appid} Name={name[:60]!r}")
+
 
             pulled = 0
             for rev in iter_app_reviews(
@@ -200,14 +229,24 @@ def main():
                 out_f.write(json.dumps(rev, ensure_ascii=False) + "\n")
                 pulled += 1
 
-            print(f"  -> collected: {pulled} reviews")
-            processed += 1
+
+            # Skip printing and counting apps with 0 reviews if flag is set
+            if args.skip_no_reviews and pulled == 0:
+                skipped += 1
+                print(f"  -> skipped (0 reviews)")
+            else:
+                print(f"  -> collected: {pulled} reviews")
+                if pulled > 0:
+                    processed += 1
+
 
             # Save checkpoint after each app
             save_checkpoint({"last_app_index": i})
 
-    print(f"Done. Processed {processed} apps this run. Output -> {args.out}")
+
+    print(f"Done. Processed {processed} apps with reviews this run. Skipped {skipped} apps with 0 reviews. Output -> {args.out}")
     print("You can rerun with --resume to continue from the next app.")
+
 
 
 if __name__ == "__main__":
