@@ -104,6 +104,8 @@ def logistical_regression(json_filepath):
 
         if (epoch + 1) % 1 == 0:
             print(f"Epoch [{epoch+1}/{epochs}], Loss: {loss.item():.4f}")
+        
+        train_losses.append((loss.item()))
 
         # Evaluation
         model.eval()
@@ -134,7 +136,7 @@ def logistical_regression(json_filepath):
     plt.legend()
     plt.show()
     
-    # --- Plot Test Accuracy ---
+    # Plot Test Accuracy 
     plt.figure(figsize=(10,4))
     plt.plot(test_accuracies, label='Test Accuracy')
     plt.xlabel('Epoch')
