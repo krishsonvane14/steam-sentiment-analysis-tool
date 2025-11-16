@@ -40,15 +40,13 @@ def logistical_regression(csv_filepath):
         # Use pre-cleaned text
         full_df["cleaned_review"] = full_df["cleaned_review"].astype(str)
 
-        # Uncommnet to use balance dataset 
-        """ 
+        # Use balance dataset 
         pos_df = full_df[full_df["sentiment"] == "positive"].sample(24000, random_state=42)
         neg_df = full_df[full_df["sentiment"] == "negative"].sample(24000, random_state=42)
 
         full_df = pd.concat([pos_df, neg_df], ignore_index=True)
         print("Using balanced dataset:")
         print(full_df["sentiment"].value_counts())
-        """
 
         # Train/test split
         x_train, x_test, y_train, y_test = train_test_split(
@@ -79,7 +77,8 @@ def logistical_regression(csv_filepath):
         criterion = nn.BCEWithLogitsLoss()
         
         # lr = learning rate
-        optimizer = optim.Adam(model.parameters(), lr=0.001)
+        optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-4)
+        # optimizer = optim.Adam(model.parameters(), lr=0.001)
 
         train_losses = []
         test_losses = []
