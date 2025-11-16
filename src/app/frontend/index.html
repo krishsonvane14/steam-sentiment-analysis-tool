@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Steam Review Sentiment</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            max-width: 900px;
+        }
+
+        h1, h2 { margin-bottom: 10px; }
+
+        textarea {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 12px;
+            font-size: 16px;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        #result, #appidResult {
+            margin-top: 20px;
+            font-weight: bold;
+            white-space: pre-wrap;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        table td, table th {
+            border: 1px solid #aaa;
+            padding: 8px;
+        }
+
+        .loading {
+            margin-top: 20px;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Steam Review Sentiment Tool</h1>
+
+<h2>Single Review</h2>
+<textarea id="reviewText" placeholder="Enter a Steam review..."></textarea>
+<button onclick="predictSentiment()">Predict Sentiment</button>
+<div id="result"></div>
+
+<hr>
+
+<h2>Analyze Reviews by AppID</h2>
+<textarea id="appidInput" placeholder="Enter Steam AppID or any identifier..."></textarea>
+<button onclick="predictFromAppID()">Analyse Reviews</button>
+<div id="appidLoading" class="loading"></div>
+<div id="appidResult"></div>
+
+<script>
+async function predictSentiment() {
+    const text = document.getElementById('reviewText').value.trim();
+    if (!text) return alert("Please enter a review.");
+
+    try {
+        const response = await fetch('http://127.0.0.1:8000/predict', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text })
+        });
+        const data = await response.json();
+
+        const labelText = `${data.label} (${(data.probability * 100).toFixed(2)}%)`;
+        document.getElementById('result').innerText = labelText;
+
+    } catch (err) {
+        document.getElementById('result').innerText = "Error: " + err.message;
+    }
+}
+
+async function predictFromAppID() {
+    const appidText = document.getElementById("appidInput").value.trim();
+    if (!appidText) return alert("Please enter an identifier.");
+
+    document.getElementById("appidLoading").innerText = "Fetching reviews...";
+    document.getElementById("appidResult").innerHTML = "";
+
+    try {
+        const response = await fetch("http://127.0.0.1:8000/predict_from_appid", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ appid: parseInt(appidText) })
+        });
+
+        const data = await response.json();
+        document.getElementById("appidLoading").innerText = "";
+
+        if (data.error) {
+            document.getElementById("appidResult").innerText = data.error;
+            return;
+        }
+
+        let resultHTML = `
+            <h3>${data.name} (AppID ${data.appid})</h3>
+            <p>Total Reviews: ${data.total_reviews}</p>
+            <p>Positive: ${data.positive_reviews}</p>
+            <p>Positive Percentage: ${data.positive_percentage.toFixed(2)}%</p>
+            <h4>Review List</h4>
+            <table>
+                <tr>
+                    <th>Text</th>
+                    <th>Probability</th>
+                    <th>Label</th>
+                </tr>
+        `;
+
+        data.reviews.forEach(r => {
+            resultHTML += `
+                <tr>
+                    <td>${r.text}</td>
+                    <td>${(r.probability * 100).toFixed(2)}%</td>
+                    <td>${r.label}</td>
+                </tr>
+            `;
+        });
+
+        resultHTML += "</table>";
+        document.getElementById("appidResult").innerHTML = resultHTML;
+
+    } catch (err) {
+        document.getElementById("appidLoading").innerText = "";
+        document.getElementById("appidResult").innerText = "Error: " + err.message;
+    }
+}
+</script>
+
+</body>
+</html>
