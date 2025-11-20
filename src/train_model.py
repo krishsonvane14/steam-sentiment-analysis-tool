@@ -39,10 +39,8 @@ def train_model(filepath):
     full_df['encoded_senti'] = LabelEncoder().fit_transform(full_df['sentiment'])
 
     # splitting the dataset up
-    noRPG_df = full_df.loc[full_df['genre'] != "RPG"]
-    onlyRPG_df = full_df.loc[full_df['genre'] == "RPG"]
-    neg_df = noRPG_df.loc[noRPG_df['encoded_senti'] == 0]
-    pos_df = noRPG_df.loc[noRPG_df['encoded_senti'] == 1]
+    neg_df = full_df.loc[full_df['encoded_senti'] == 0]
+    pos_df = full_df.loc[full_df['encoded_senti'] == 1]
     pos_df = pos_df.sample(n=neg_df.shape[0], random_state=42)
 
     np_df = [neg_df, pos_df]
@@ -69,9 +67,6 @@ def train_model(filepath):
 
     y_train = torch.tensor(y_train.values)
     y_test = torch.tensor(y_test.values)
-
-    print(x_test.shape)
-    print(y_test.shape)
 
     # linear regression
     input_dim = x_train.shape[1]
@@ -122,25 +117,6 @@ def train_model(filepath):
     
     print("time to train and eval: ", str(time.time() - start_time))
     
-    #testing on rpg
-    '''
-    rpgx_train, rpgx_test, rpgy_train, rpgy_test = train_test_split(
-        onlyRPG_df['cleaned_review'], onlyRPG_df['encoded_senti'], test_size=11382, stratify=onlyRPG_df['sentiment'],
-        random_state=42
-    )
-
-    rpgx_train = vectorizer.fit_transform(rpgx_train)
-    rpgx_test = vectorizer.transform(rpgx_test)
-
-    rpgx_train = torch.tensor(rpgx_train.toarray()).float()
-    rpgx_test = torch.tensor(rpgx_test.toarray()).float()
-
-    rpgy_train = torch.tensor(rpgy_train.values)
-    rpgy_test = torch.tensor(rpgy_test.values)
-
-    print(rpgx_test.shape)
-    print(rpgy_test.shape)
-    '''
     # confusion matrix
     with torch.no_grad():
         model.eval()
