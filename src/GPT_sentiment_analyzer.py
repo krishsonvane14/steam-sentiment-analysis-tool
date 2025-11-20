@@ -1,15 +1,13 @@
 import json
 import os
 import time
+from typing import List, Literal
 
 import pandas as pd
 import sklearn as skl
 from dotenv import load_dotenv
 from openai import OpenAI
 from pydantic import BaseModel
-from typing import List, Literal
-
-from spyder.plugins.help.utils.sphinxify import usage
 
 # load local environment
 load_dotenv()
@@ -127,7 +125,7 @@ def classify_reviews_from_csv(client,
                               input_tokens_col = "input_tokens",
                               output_tokens_col = "output_tokens",
                               reviews_limit=None,
-                              progress_interval = 20):
+                              progress_interval = 5):
 
     reviews_dataframe = pd.read_csv(input_csv)
 
@@ -159,9 +157,10 @@ def classify_reviews_from_csv(client,
             print(f"[ERROR] row {index}: {e}")
             reviews_dataframe.loc[index, gpt_sentiment_col] = "error"
 
+
+
         if (index + 1) % progress_interval == 0 or index + 1 == reviews_count:
-            print(f"showing review {index + 1}/{reviews_count} analysis:")
-            print(reviews_dataframe.iloc[index, 1:])
+            print(f"showing review {index + 1}/{reviews_count} analysis: {reviews_dataframe.iloc[index, [5,6,7]].to_dict()}")
 
     # print finish message with stats
     analysis_end_time = time.perf_counter()
