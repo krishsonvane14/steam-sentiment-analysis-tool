@@ -8,8 +8,6 @@ from torch import nn, optim
 import sys
 import matplotlib.pyplot as plt
 
-
-
 class LogisticRegressionModel(nn.Module):
     def __init__(self, input_dim):
         super().__init__()

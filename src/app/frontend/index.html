@@ -1,146 +1,111 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Steam Review Sentiment</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 40px;
-            max-width: 900px;
-        }
+    <head>
+        <meta charset="UTF-8">
+        <title>Steam Review Sentiment</title>
+        <link rel="stylesheet" href="style.css">
+        <script src="script.js"></script>
 
-        h1, h2 { margin-bottom: 10px; }
+    </head>
 
-        textarea {
-            width: 100%;
-            padding: 10px;
-            margin-bottom: 12px;
-            font-size: 16px;
-        }
-
-        button {
-            padding: 10px 20px;
-            font-size: 16px;
-            cursor: pointer;
-        }
-
-        #result, #appidResult {
-            margin-top: 20px;
-            font-weight: bold;
-            white-space: pre-wrap;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 15px;
-        }
-
-        table td, table th {
-            border: 1px solid #aaa;
-            padding: 8px;
-        }
-
-        .loading {
-            margin-top: 20px;
-            font-style: italic;
-        }
-    </style>
-</head>
-<body>
-
-<h1>Steam Review Sentiment Tool</h1>
-
-<h2>Single Review</h2>
-<textarea id="reviewText" placeholder="Enter a Steam review..."></textarea>
-<button onclick="predictSentiment()">Predict Sentiment</button>
-<div id="result"></div>
-
-<hr>
-
-<h2>Analyze Reviews by AppID</h2>
-<textarea id="appidInput" placeholder="Enter Steam AppID or any identifier..."></textarea>
-<button onclick="predictFromAppID()">Analyse Reviews</button>
-<div id="appidLoading" class="loading"></div>
-<div id="appidResult"></div>
-
-<script>
-async function predictSentiment() {
-    const text = document.getElementById('reviewText').value.trim();
-    if (!text) return alert("Please enter a review.");
-
-    try {
-        const response = await fetch('http://127.0.0.1:8000/predict', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text })
-        });
-        const data = await response.json();
-
-        const labelText = `${data.label} (${(data.probability * 100).toFixed(2)}%)`;
-        document.getElementById('result').innerText = labelText;
-
-    } catch (err) {
-        document.getElementById('result').innerText = "Error: " + err.message;
-    }
-}
-
-async function predictFromAppID() {
-    const appidText = document.getElementById("appidInput").value.trim();
-    if (!appidText) return alert("Please enter an identifier.");
-
-    document.getElementById("appidLoading").innerText = "Fetching reviews...";
-    document.getElementById("appidResult").innerHTML = "";
-
-    try {
-        const response = await fetch("http://127.0.0.1:8000/predict_from_appid", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ appid: parseInt(appidText) })
-        });
-
-        const data = await response.json();
-        document.getElementById("appidLoading").innerText = "";
-
-        if (data.error) {
-            document.getElementById("appidResult").innerText = data.error;
-            return;
-        }
-
-        let resultHTML = `
-            <h3>${data.name} (AppID ${data.appid})</h3>
-            <p>Total Reviews: ${data.total_reviews}</p>
-            <p>Positive: ${data.positive_reviews}</p>
-            <p>Positive Percentage: ${data.positive_percentage.toFixed(2)}%</p>
-            <h4>Review List</h4>
+    <body>
+        <h1>Steam Review Sentiment Tool</h1>
+        <div class="plots">
+            <h1>About our models</h1>
             <table>
                 <tr>
-                    <th>Text</th>
-                    <th>Probability</th>
-                    <th>Label</th>
+                    <th></th>
+                    <th>Linear Model</th>
+                    <th>Logistic Model</th>
                 </tr>
-        `;
 
-        data.reviews.forEach(r => {
-            resultHTML += `
                 <tr>
-                    <td>${r.text}</td>
-                    <td>${(r.probability * 100).toFixed(2)}%</td>
-                    <td>${r.label}</td>
+                    <th>Data Split</th>
+                    <td>70% Training / 20% Validation / 10% Testing</td>
+                    <td>70% Training / 20% Validation / 10% Testing</td>
                 </tr>
-            `;
-        });
 
-        resultHTML += "</table>";
-        document.getElementById("appidResult").innerHTML = resultHTML;
+                <tr>
+                    <th>Number of Features</th>
+                    <td id="linear-features"></td>
+                    <td id="logistic-features"></td>
+                </tr>
+                <tr>
+                    <th>Loss Function</th>
+                    <td>NLLLoss</td>
+                    <td>BCELoss / BCEWithLogitsLoss</td>
+                </tr>
 
-    } catch (err) {
-        document.getElementById("appidLoading").innerText = "";
-        document.getElementById("appidResult").innerText = "Error: " + err.message;
-    }
-}
-</script>
+                <tr>
+                    <th>Optimizer</th>
+                    <td>Adam</td>
+                    <td>Adam</td>
+                </tr>
 
-</body>
+                <tr>
+                    <th>Learning Rate</th>
+                    <td id="linear-lr"></td>
+                    <td id="logistic-lr"></td>
+                </tr>
+
+                <tr>
+                    <th>Epochs</th>
+                    <td id="linear-epochs"></td>
+                    <td id="logistic-epochs"></td>
+                </tr>
+                <tr>
+                    <th>Accuracy</th>
+                    <td id="linear-acc">Loading...</td>
+                    <td id="logistic-acc">Loading...</td>
+                </tr>
+
+                <tr>
+                    <th>Loss over time</th>
+                    <td><img id="linear-loss"
+                            src="http://localhost:8000/linear_training_plot.png"
+                            width="360"></td>
+                    <td><img id="logistic-loss"
+                            src="http://localhost:8000/logistic_training_plot.png"
+                            width="360"></td>
+                </tr>
+
+                <tr>
+                    <th>Confusion Matrix</th>
+                    <td><img id="linear-cm"
+                            src="http://localhost:8000/linear_confusion_matrix.png"
+                            width="360"></td>
+                    <td><img id="logistic-cm"
+                            src="http://localhost:8000/logistic_confusion_matrix.png"
+                            width="360"></td>
+                </tr>
+            </table>
+            <h1>Analyze Review</h1>
+            <div class="single_review">
+                <h2>Classify One Review</h2>
+                <textarea id="single_input" placeholder="Enter a review..."
+                    rows="4" cols="60"></textarea>
+                <br>
+                <button onclick="predictSentiment()">Analyze</button>
+                <p>
+                    <strong>Result:</strong>
+                    <span id="single-result">Waiting...</span>
+                </p>
+            </div>
+            <div class="appid_review">
+                <h2>Analyse Reviews for a Steam App</h2>
+
+                <input id="appid-input" type="text"
+                    placeholder="Enter Steam AppID">
+                <br>
+
+                <button onclick="predictFromAppID()">Analyze</button>
+
+                <p><strong>Result:</strong></p>
+
+                <div id="appid-loading"></div>
+                <div id="appid-result"></div>
+            </div>
+        </div>
+
+    </body>
 </html>
