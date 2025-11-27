@@ -38,35 +38,74 @@ def train_model(filepath):
     full_df = pd.read_csv(filepath)
     full_df['encoded_senti'] = LabelEncoder().fit_transform(full_df['sentiment'])
 
+    seen_df = full_df.loc[full_df['__appid'] != 377160]
+    seen_df = full_df.loc[full_df['__appid'] != 4000]
+
+    unseen_df = full_df.loc[full_df['__appid'] == 377160]
+    unseen_df = full_df.loc[full_df['__appid'] == 4000]
+
+    print(seen_df.shape)
+
     # splitting the dataset up
+    neg_df = seen_df.loc[seen_df['encoded_senti'] == 0]
+    pos_df = seen_df.loc[seen_df['encoded_senti'] == 1]
+    pos_df = pos_df.sample(n=neg_df.shape[0], random_state=42)
+
+    '''
     neg_df = full_df.loc[full_df['encoded_senti'] == 0]
     pos_df = full_df.loc[full_df['encoded_senti'] == 1]
     pos_df = pos_df.sample(n=neg_df.shape[0], random_state=42)
-
+    '''
     np_df = [neg_df, pos_df]
     train_df = pd.concat(np_df)
+    print(train_df.shape)
 
     # TRAINING PREPARATION
     # split into train and test sets with random seed 42
-    
-    x_train, x_test, y_train, y_test = train_test_split(
-        train_df['cleaned_review'], train_df['encoded_senti'], test_size=.3, stratify=train_df['sentiment'],
+    x_train, x_val, y_train, y_val = train_test_split(
+        train_df['cleaned_review'], train_df['encoded_senti'], test_size=.1, stratify=train_df['sentiment'],
         random_state=42
     )
-    #print(x_train.shape, x_test.shape, y_train.shape, y_test.shape)
+
+    _, x_test, _, y_test = train_test_split(
+        unseen_df['cleaned_review'], unseen_df['encoded_senti'], test_size=9288, stratify=unseen_df['sentiment'],
+        random_state=42
+    )
+
+    #print(x_test.dtype)
+    #x_test.to_csv('validation_reviews.csv', index=False)
+
+    '''
+    alternative of train-val-test split
+    make sure that seen data includes the unseen data
+    x_train, x_val, y_train, y_val = train_test_split(
+        train_df['cleaned_review'], train_df['encoded_senti'], 
+        test_size=.2, stratify=train_df['sentiment'], random_state=42
+    )
+
+    x_train, x_test, y_train, y_test = train_test_split(
+        x_train, y_train, test_size=1./8, stratify=train_df['sentiment'],
+        random_state=42
+    )
+
+    '''
     print("\n")
     print("vectorizing\n")
+    
     
     # convert x_train and x_test to vectors to tensors
     vectorizer = TfidfVectorizer(max_features=3000)
     x_train = vectorizer.fit_transform(x_train)
     x_test = vectorizer.transform(x_test)
+    x_val = vectorizer.transform(x_val)
 
     x_train = torch.tensor(x_train.toarray()).float()
     x_test = torch.tensor(x_test.toarray()).float()
+    x_val = torch.tensor(x_val.toarray()).float()
 
     y_train = torch.tensor(y_train.values)
     y_test = torch.tensor(y_test.values)
+    y_val = torch.tensor(y_val.values)
 
     # linear regression
     input_dim = x_train.shape[1]
@@ -76,8 +115,8 @@ def train_model(filepath):
     optimizer = optim.Adam(model.parameters(), lr=0.00075)
 
     train_losses = []
-    test_losses = []
-    test_accuracies = []
+    val_losses = []
+    val_accuracies = []
     pred_label = []
 
     print("training and eval: \n")
@@ -100,48 +139,61 @@ def train_model(filepath):
         
         with torch.no_grad():
             model.eval()
-            fPass = model(x_test)
-            test_loss = criterion(fPass, y_test)
-            test_losses.append(test_loss)
+            fPass = model(x_val)
+            val_loss = criterion(fPass, y_val)
+            val_losses.append(val_loss)
 
             newPass = torch.exp(fPass)
             top_p, top_class = newPass.topk(1, dim=1)
-            equals = top_class == y_test.view(*top_class.shape)
-            test_accuracy = torch.mean(equals.float())
-            test_accuracies.append(test_accuracy)
+            equals = top_class == y_val.view(*top_class.shape)
+            val_accuracy = torch.mean(equals.float())
+            val_accuracies.append(val_accuracy)
 
         print(f"Epoch: {e+1}/{epochs}.. ",
             f"Training Loss: {train_loss:.3f}.. ",
-            f"Test Loss: {test_loss:.3f}.. ",
-            f"Test Accuracy: {test_accuracy:.3f}")
+            f"Val. Loss: {val_loss:.3f}.. ",
+            f"Val. Accuracy: {val_accuracy:.3f}")
     
     print("time to train and eval: ", str(time.time() - start_time))
     
     # confusion matrix
     with torch.no_grad():
         model.eval()
-        fPass = model(x_test)
-        test_loss = criterion(fPass, y_test)
-        test_losses.append(test_loss)
+        fPass = model(x_val)
+        #val_loss = criterion(fPass, y_val)
+        #test_losses.append(test_loss)
 
         newPass = torch.exp(fPass)
         _, top_class = newPass.topk(1, dim=1)
         pred_label = top_class
-        equals = top_class == y_test.view(*top_class.shape)
-        test_accuracy = torch.mean(equals.float())
-        test_accuracies.append(test_accuracy)
+        equals = top_class == y_val.view(*top_class.shape)
+        val_accuracy = torch.mean(equals.float())
+        val_accuracies.append(val_accuracy)
 
-    cm = confusion_matrix(y_test, pred_label)
+    cm = confusion_matrix(y_val, pred_label)
     disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=["Negative", "Positive"])
     disp.plot(cmap="Blues")
     plt.title(f"Confusion Matrix")
     plt.grid(False)
     plt.savefig('linreg_fig.png')
 
+    # test model with unseen data
+    model.eval()
+    output = model(x_test)
+    #print(output)
+    output = torch.exp(output)
+    #print(newPass)
+    _, top_class = output.topk(1, dim=1)
+    pred_label = top_class
+    equals = top_class == y_test.view(*top_class.shape)
+    test_accuracy = torch.mean(equals.float())
+    print("accuracy: ", test_accuracy.item()*100, "%")
+
+
     # Plot Losses 
     plt.figure(figsize=(10,4))
     plt.plot(train_losses, label='Train Loss')
-    plt.plot(test_losses, label='Test Loss')
+    plt.plot(val_losses, label='Test Loss')
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
     plt.title('Training and Test Loss')
@@ -151,7 +203,7 @@ def train_model(filepath):
     
     # Plot Test Accuracy 
     plt.figure(figsize=(10,4))
-    plt.plot(test_accuracies, label='Test Accuracy')
+    plt.plot(val_accuracies, label='Test Accuracy')
     plt.xlabel('Epoch')
     plt.ylabel('Accuracy')
     plt.title('Test Accuracy per Epoch')
