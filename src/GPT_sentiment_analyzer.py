@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 import time
 
 import pandas as pd
@@ -86,7 +87,6 @@ def classify_from_jsonl(input_jsonl, output_path=None, limit=None, api_call_dela
             time.sleep(api_call_delay)
 
     return
-
 
 def classify_reviews_from_csv(client,
                               input_csv,
@@ -215,10 +215,17 @@ def generate_reviews_sample_csv(input_csv, size = 100, random_state=49,stratifie
 
 
 
-def main (reviewsPath):
+def main ():
+    """
+    main function, classify reviews and return evaluation
+    """
 
-    classifed_reviews_csv, _ = classify_reviews_from_csv(reviewsPath)
+    if len(sys.argv) == 0:
+        print("usage: python input_csv")
+        sys.exit(1)
 
+    input_reviews_csv_path = sys.argv[1]
+    classifed_reviews_csv, _ = classify_reviews_from_csv(input_reviews_csv_path)
     evaluate_sentiment_classifer_from_csv(classifed_reviews_csv)
 
 if __name__ == "__main___":
