@@ -6,6 +6,13 @@ import pandas as pd
 import sklearn as skl
 from dotenv import load_dotenv
 from openai import OpenAI
+import typing
+
+class SentimentResult(typing.NamedTuple):
+    sentiment: str
+    input_tokens_count: int
+    output_tokens_count: int
+    response_time: float
 
 fake_reviews = ["Great story and music.", "This game crashes constantly.","Pretty good but too short.", "Horrible, do not play ever!"]
 
@@ -26,24 +33,31 @@ def single_analyze_sentiment(client, review_text, model="gpt-5-mini", max_retrie
 
     prompt = f"{prompt_content}{review_text}"
 
+    # attempt calling openAI
     for attempt in range(max_retries):
         try:
+
+            api_call_start_time = time.perf_counter()
+
             response = client.responses.create(
                 model = model,
                 input =  prompt
             )
+
+            api_call_end_time = time.perf_counter()
 
             # normalize and validate response
             response_normalized = response.output_text.strip().lower()
             if response_normalized not in sentiment_labels:
                 raise ValueError(f"unrecognized sentiment label: {response_normalized}")
 
-            # return sentiment and usage stats as dict
-            return {
-                "sentiment": response_normalized,
-                "input_tokens": response.usage.input_tokens,
-                "output_tokens": response.usage.output_tokens
-            }
+            # return sentiment and usage stats
+            return SentimentResult(
+                sentiment = response_normalized,
+                input_tokens_count= response.usage.input_tokens_count,
+                output_tokens_count= response.usage.output_tokens_count,
+                response_time= api_call_end_time - api_call_start_time
+            )
 
         except:
             if attempt + 1 == max_retries:
@@ -82,6 +96,7 @@ def classify_reviews_from_csv(client,
                               gpt_sentiment_col = "gpt_sentiment",
                               input_tokens_col = "input_tokens",
                               output_tokens_col = "output_tokens",
+                              response_time_col = "response_time",
                               reviews_limit=None,
                               progress_interval = 5):
 
@@ -99,6 +114,7 @@ def classify_reviews_from_csv(client,
     reviews_dataframe[gpt_sentiment_col] = None
     reviews_dataframe[input_tokens_col] = 0
     reviews_dataframe[output_tokens_col] = 0
+    reviews_dataframe[response_time_col] = 0
 
     analysis_start_time = time.perf_counter()
 
@@ -107,16 +123,20 @@ def classify_reviews_from_csv(client,
         try:
             sentiment_result = single_analyze_sentiment(client, review_text, model=gpt_model)
 
-            reviews_dataframe.loc[index, gpt_sentiment_col] = sentiment_result["sentiment"]
-            reviews_dataframe.loc[index, input_tokens_col] = sentiment_result["input_tokens"]
-            reviews_dataframe.loc[index, output_tokens_col] = sentiment_result["output_tokens"]
+            reviews_dataframe.loc[index, gpt_sentiment_col] = sentiment_result.sentiment
+            reviews_dataframe.loc[index, input_tokens_col] = sentiment_result.input_tokens_count
+            reviews_dataframe.loc[index, output_tokens_col] = sentiment_result.output_tokens_count
+            reviews_dataframe.loc[index, response_time_col] = sentiment_result.response_time
 
         except Exception as e:
             print(f"[ERROR] row {index}: {e}")
             reviews_dataframe.loc[index, gpt_sentiment_col] = "error"
 
         if (index + 1) % progress_interval == 0 or index + 1 == reviews_count:
-            print(f"showing review {index + 1}/{reviews_count} analysis: {reviews_dataframe.iloc[index, [5,6,7]].to_dict()}")
+            result_cols = [gpt_sentiment_col, input_tokens_col, output_tokens_col, response_time_col]
+            review_results = reviews_dataframe.loc[index,result_cols].to_dict()
+
+            print(f"Review {index + 1}/{reviews_count} -> {review_results}")
 
     # print finish message with stats
     analysis_end_time = time.perf_counter()
@@ -197,9 +217,9 @@ def generate_reviews_sample_csv(input_csv, size = 100, random_state=49,stratifie
 
 def main (reviewsPath):
 
-    classifedReviewsCSV, time = classify_reviews_from_csv(reviewsPath)
+    classifed_reviews_csv, _ = classify_reviews_from_csv(reviewsPath)
 
-    evaluate_sentiment_classifer_from_csv(classifedReviewsCSV)
+    evaluate_sentiment_classifer_from_csv(classifed_reviews_csv)
 
 if __name__ == "__main___":
     main()
