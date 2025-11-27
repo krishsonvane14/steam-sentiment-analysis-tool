@@ -1,13 +1,13 @@
 import json
 import os
 import time
-from typing import List, Literal
 
 import pandas as pd
 import sklearn as skl
 from dotenv import load_dotenv
 from openai import OpenAI
-from pydantic import BaseModel
+
+fake_reviews = ["Great story and music.", "This game crashes constantly.","Pretty good but too short.", "Horrible, do not play ever!"]
 
 # load local environment
 load_dotenv()
@@ -16,19 +16,6 @@ load_dotenv()
 openai_api_key = os.getenv("OPENAI_API_KEY")
 
 openai_client = OpenAI(api_key=openai_api_key)
-
-# define structured response for batch review processing
-class SentimentInput(BaseModel):
-    prompt: str
-    reviews: List[str]
-
-sentiment_input_schema = SentimentInput.model_json_schema()
-
-class SentimentResponse(BaseModel):
-    sentiments: List[Literal["positive","negative"]]
-
-sentiment_response_schema = SentimentResponse.model_json_schema()
-
 
 def single_analyze_sentiment(client, review_text, model="gpt-5-mini", max_retries = 5, retry_sleep = 1, prompt_content = None, sentiment_labels=None):
 
@@ -87,35 +74,6 @@ def classify_from_jsonl(input_jsonl, output_path=None, limit=None, api_call_dela
     return
 
 
-
-def batch_analyze_sentiment(reviews_batch, gpt_model="gpt-5-mini", max_retries = 5, retry_sleep = 2, prompt_content=None):
-
-    # default content
-    if prompt_content is None:
-        prompt_content = (
-            "Label each of following video game reviews from Steam as 'positive' or 'negative'."
-        )
-
-    input_structure = SentimentInput(prompt=prompt_content,reviews=reviews_batch)
-
-    for attempt in range(max_retries):
-        try:
-            response = openai_client.responses.parse(
-                model = gpt_model,
-                input = input_structure.model_dump(),
-                text_format = sentiment_response_schema
-            )
-
-            # return response.output[0].parsed.sentiments
-            return response.output_parsed
-
-        except Exception as e:
-            if attempt + 1 == max_retries:
-                raise
-            time.sleep(retry_sleep * (attempt + 1))
-
-    return None
-
 def classify_reviews_from_csv(client,
                               input_csv,
                               gpt_model = "gpt-5-mini",
@@ -157,8 +115,6 @@ def classify_reviews_from_csv(client,
             print(f"[ERROR] row {index}: {e}")
             reviews_dataframe.loc[index, gpt_sentiment_col] = "error"
 
-
-
         if (index + 1) % progress_interval == 0 or index + 1 == reviews_count:
             print(f"showing review {index + 1}/{reviews_count} analysis: {reviews_dataframe.iloc[index, [5,6,7]].to_dict()}")
 
@@ -179,7 +135,7 @@ def classify_reviews_from_csv(client,
     reviews_dataframe.to_csv(output_csv,index=False)
     print(f"saved with appended sentiment to {output_csv}")
 
-    return reviews_dataframe, output_csv, analysis_total_time
+    return output_csv, analysis_total_time
 
 
 def evaluate_sentiment_classifer_from_csv(input_csv, actual_sentiment_col="sentiment", predicted_sentiment_col="gpt_sentiment",
@@ -197,7 +153,7 @@ def evaluate_sentiment_classifer_from_csv(input_csv, actual_sentiment_col="senti
 
     sentiment_report_df = pd.DataFrame(sentiment_report).transpose()
 
-    # print confusion matrix and classification report
+    # print confusion matrix and classification report to console
     print(f"Confusion Matrix for {input_csv}")
     print(sentiment_confusion_matrix)
 
@@ -237,4 +193,13 @@ def generate_reviews_sample_csv(input_csv, size = 100, random_state=49,stratifie
 
     return output_csv
 
-fake_reviews = ["Great story and music.", "This game crashes constantly.","Pretty good but too short.", "Horrible, do not play ever!"]
+
+
+def main (reviewsPath):
+
+    classifedReviewsCSV, time = classify_reviews_from_csv(reviewsPath)
+
+    evaluate_sentiment_classifer_from_csv(classifedReviewsCSV)
+
+if __name__ == "__main___":
+    main()
