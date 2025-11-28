@@ -39,12 +39,15 @@ def train_model(filepath):
     full_df['encoded_senti'] = LabelEncoder().fit_transform(full_df['sentiment'])
 
     seen_df = full_df.loc[full_df['__appid'] != 377160]
-    seen_df = full_df.loc[full_df['__appid'] != 4000]
+    seen_df = seen_df.loc[full_df['__appid'] != 4000]
 
-    unseen_df = full_df.loc[full_df['__appid'] == 377160]
-    unseen_df = full_df.loc[full_df['__appid'] == 4000]
+    unseen_1 = full_df.loc[full_df['__appid'] == 377160]
+    unseen_2 = full_df.loc[full_df['__appid'] == 4000]
+    unseen_df = pd.concat([unseen_1, unseen_2])
+    print(unseen_df)
+    # export the test set csv for the LLM
+    unseen_df.to_csv('test_reviews.csv', index=False)
 
-    print(seen_df.shape)
 
     # splitting the dataset up
     neg_df = seen_df.loc[seen_df['encoded_senti'] == 0]
@@ -58,7 +61,6 @@ def train_model(filepath):
     '''
     np_df = [neg_df, pos_df]
     train_df = pd.concat(np_df)
-    print(train_df.shape)
 
     # TRAINING PREPARATION
     # split into train and test sets with random seed 42
@@ -68,12 +70,9 @@ def train_model(filepath):
     )
 
     _, x_test, _, y_test = train_test_split(
-        unseen_df['cleaned_review'], unseen_df['encoded_senti'], test_size=9288, stratify=unseen_df['sentiment'],
+        unseen_df['cleaned_review'], unseen_df['encoded_senti'], test_size=12836, stratify=unseen_df['sentiment'],
         random_state=42
     )
-
-    #print(x_test.dtype)
-    #x_test.to_csv('validation_reviews.csv', index=False)
 
     '''
     alternative of train-val-test split
@@ -89,8 +88,7 @@ def train_model(filepath):
     )
 
     '''
-    print("\n")
-    print("vectorizing\n")
+    print("vectorizing \n")
     
     
     # convert x_train and x_test to vectors to tensors
@@ -198,7 +196,6 @@ def train_model(filepath):
     plt.ylabel('Loss')
     plt.title('Training and Test Loss')
     plt.legend()
-    #plt.show()
     plt.savefig('loss_plot.png')
     
     # Plot Test Accuracy 
@@ -208,7 +205,6 @@ def train_model(filepath):
     plt.ylabel('Accuracy')
     plt.title('Test Accuracy per Epoch')
     plt.legend()
-    #plt.show()
     plt.savefig('test_plot.png')
     
 
