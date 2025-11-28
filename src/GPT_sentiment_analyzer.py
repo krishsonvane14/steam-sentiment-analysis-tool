@@ -220,12 +220,12 @@ def main ():
     main function, classify reviews and return evaluation
     """
 
-    if len(sys.argv) == 0:
-        print("usage: python input_csv")
+    if len(sys.argv) != 2:
+        print("usage: GPT_sentiment_analyzer.py [input_csv]")
         sys.exit(1)
 
     input_reviews_csv_path = sys.argv[1]
-    classifed_reviews_csv, _ = classify_reviews_from_csv(input_reviews_csv_path)
+    classifed_reviews_csv, _ = classify_reviews_from_csv(sys.argv[1])
     evaluate_sentiment_classifer_from_csv(classifed_reviews_csv)
 
 if __name__ == "__main___":
