@@ -29,7 +29,7 @@ openai_api_key = os.getenv("OPENAI_API_KEY")
 
 openai_client = OpenAI(api_key=openai_api_key)
 
-def single_analyze_sentiment(client, review_text, model="gpt-5-mini", max_retries = 5, retry_sleep = 1, prompt_content = None, sentiment_labels=None):
+def single_analyze_sentiment(client, review_text, model="gpt-5-nano", max_retries = 5, retry_sleep = 1, prompt_content = None, sentiment_labels=None):
 
     if sentiment_labels is None:
         sentiment_labels = ["positive", "negative"]
@@ -59,12 +59,13 @@ def single_analyze_sentiment(client, review_text, model="gpt-5-mini", max_retrie
             # return sentiment and usage stats
             return SentimentResult(
                 sentiment = response_normalized,
-                input_tokens_count= response.usage.input_tokens_count,
-                output_tokens_count= response.usage.output_tokens_count,
+                input_tokens_count= response.usage.input_tokens,
+                output_tokens_count= response.usage.output_tokens,
                 response_time= api_call_end_time - api_call_start_time
             )
 
-        except:
+        except Exception as e:
+            print(f"attempt {attempt+1} failed: {e}")
             if attempt + 1 == max_retries:
                 raise RuntimeError(f"failed after {max_retries} retries")
             time.sleep(retry_sleep * (attempt + 1))
@@ -116,7 +117,7 @@ def normalize_binary_label(label):
 
 def classify_reviews_from_csv(client,
                               input_csv,
-                              gpt_model = "gpt-5-mini",
+                              gpt_model = "gpt-5-nano",
                               output_csv=None,
                               review_col="cleaned_review",
                               gpt_sentiment_col = "gpt_sentiment",
@@ -357,31 +358,31 @@ def build_parser():
 
     # classification commands
     classify_parser = subparsers.add_parser("classify", help="classify reviews with GPT model")
-    classify_parser.add_argument("to_classify_csv", help="the name of the csv with reviews to classify")
-    classify_parser.add_argument("--review_column", default="cleaned_reviews",
+    classify_parser.add_argument("csv_to_classify", help="the name of the csv with reviews to classify")
+    classify_parser.add_argument("--reviews_col", default="cleaned_review",
                                  help="the name of the column in the csv with review text to classify")
-    classify_parser.add_argument("--reviewer_sentiment_column", default="sentiment")
-    classify_parser.add_argument("--model", default="gpt-5-mini")
+    classify_parser.add_argument("--reviewer_sentiment_col", default="sentiment")
+    classify_parser.add_argument("--model", default="gpt-5-nano")
     classify_parser.add_argument("--limit", type=int, default=None)
-    classify_parser.add_argument("--classified_csv_name", default=None)
+    classify_parser.add_argument("--o", default=None)
 
 
     # evaluation commands
     evaluate_parser = subparsers.add_parser("evaluate", help="evaluate sentiment classification results from csv")
-    evaluate_parser.add_argument("to_evaluate_csv", help="the name of the csv with sentiment classification results to evaluate")
+    evaluate_parser.add_argument("csv_to_evaluate", help="the name of the csv with sentiment classification results to evaluate")
 
     # classify and evaluate
     both_parser = subparsers.add_parser("both", help=" classify sentiment and results from csv")
     both_parser.add_argument("to_classify_csv")
-    both_parser.add_argument("--model",default="gpt-5-mini")
+    both_parser.add_argument("--model",default="gpt-5-nano")
     both_parser.add_argument("--limit", type=int, default=None)
     both_parser.add_argument("--classified_csv_name", default=None)
 
     # sample dataset
     sampling_parser = subparsers.add_parser("sample", help="sample reviews from a dataset")
-    sampling_parser.add_argument("to_sample_csv", help="the name of the csv with reviews to sample")
+    sampling_parser.add_argument("csv_to_sample", help="the name of the csv with reviews to sample")
     sampling_parser.add_argument("--size", type=int, default=100, help="number of reviews to sample")
-    sampling_parser.add_argument("--random_state", type=int, default=49, help="random seed for sampling")
+    sampling_parser.add_argument("--random", type=int, default=49, help="random seed for sampling")
     sampling_parser.add_argument("--stratify", type=str, default=None, help="stratification value")
 
     return parser
@@ -394,20 +395,20 @@ def main ():
 
     if args.command == "classify":
         output_csv, _ = classify_reviews_from_csv(client=openai_client,
-                                                  input_csv=args.to_classify_csv,
+                                                  input_csv=args.csv_to_classify,
                                                   gpt_model=args.model,
-                                                  review_col=args.review_column,
-                                                  reviewer_sentiment_col=args.reviewer_sentiment_column,
+                                                  review_col=args.reviews_col,
+                                                  reviewer_sentiment_col=args.reviewer_sentiment_col,
                                                   reviews_limit=args.limit,
-                                                  output_csv=args.classified_csv_name
+                                                  output_csv=args.o
                                                   )
     elif args.command == "evaluate":
-        evaluate_sentiment_classifier_from_csv(input_csv=args.to_evaluate_csv)
+        evaluate_sentiment_classifier_from_csv(input_csv=args.csv_to_evaluate,)
 
     elif args.command == "sample":
-        sample_csv = generate_reviews_sample_csv(input_csv=args.to_sample_csv,
+        sample_csv = generate_reviews_sample_csv(input_csv=args.csv_to_sample,
                                                  size=args.size,
-                                                 random_state=args.random_state,
+                                                 random_state=args.random,
                                                  stratified_by=args.stratify)
 
 
