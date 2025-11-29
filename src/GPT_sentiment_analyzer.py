@@ -128,7 +128,13 @@ def classify_reviews_from_csv(client,
                               reviewer_sentiment_col = "sentiment",
                               reviewer_sentiment_norm_col = "sentiment_norm",
                               reviews_limit=None,
-                              progress_interval = 5):
+                              save_increment = 20,
+                              progress_interval = 10):
+
+    # procedurally generate title for output csv if no title is provided
+    if output_csv is None:
+        root, ext = os.path.splitext(input_csv)
+        output_csv = f"{root}_{gpt_model}_sentiment{ext}"
 
     reviews_dataframe = pd.read_csv(input_csv)
 
@@ -158,33 +164,47 @@ def classify_reviews_from_csv(client,
 
     analysis_start_time = time.perf_counter()
 
-    for index, review_text in enumerate(reviews_dataframe[review_col].astype(str)):
+    try:
+        for index, review_text in enumerate(reviews_dataframe[review_col].astype(str)):
 
-        try:
-            sentiment_result = single_analyze_sentiment(client, review_text, model=gpt_model)
-
-            # normalize result
             try:
-                numeric_sentiment = normalize_binary_label(sentiment_result.sentiment)
-            except ValueError as e:
+                sentiment_result = single_analyze_sentiment(client, review_text, model=gpt_model)
+
+                # normalize result
+                try:
+                    numeric_sentiment = normalize_binary_label(sentiment_result.sentiment)
+                except ValueError as e:
+                    print(f"[ERROR] row {index}: {e}")
+                    numeric_sentiment = None
+
+                reviews_dataframe.loc[index, gpt_sentiment_col] = sentiment_result.sentiment
+                reviews_dataframe.loc[index, norm_gpt_sentiment_col] = numeric_sentiment
+                reviews_dataframe.loc[index, input_tokens_col] = sentiment_result.input_tokens_count
+                reviews_dataframe.loc[index, output_tokens_col] = sentiment_result.output_tokens_count
+                reviews_dataframe.loc[index, response_time_col] = sentiment_result.response_time
+
+            except Exception as e:
                 print(f"[ERROR] row {index}: {e}")
-                numeric_sentiment = None
+                reviews_dataframe.loc[index, gpt_sentiment_col] = "error"
 
-            reviews_dataframe.loc[index, gpt_sentiment_col] = sentiment_result.sentiment
-            reviews_dataframe.loc[index, norm_gpt_sentiment_col] = numeric_sentiment
-            reviews_dataframe.loc[index, input_tokens_col] = sentiment_result.input_tokens_count
-            reviews_dataframe.loc[index, output_tokens_col] = sentiment_result.output_tokens_count
-            reviews_dataframe.loc[index, response_time_col] = sentiment_result.response_time
+            # periodic save
+            if (index + 1) % save_increment == 0 or index + 1 == reviews_count:
+                reviews_dataframe.to_csv(output_csv, index=False)
+                print(f"Checkpoint saved output at row {index + 1}/{reviews_count}")
 
-        except Exception as e:
-            print(f"[ERROR] row {index}: {e}")
-            reviews_dataframe.loc[index, gpt_sentiment_col] = "error"
 
-        if (index + 1) % progress_interval == 0 or index + 1 == reviews_count:
-            result_cols = [gpt_sentiment_col, norm_gpt_sentiment_col, input_tokens_col, output_tokens_col, response_time_col]
-            review_results = reviews_dataframe.loc[index,result_cols].to_dict()
+            if (index + 1) % progress_interval == 0 or index + 1 == reviews_count:
+                result_cols = [gpt_sentiment_col, norm_gpt_sentiment_col, input_tokens_col, output_tokens_col, response_time_col]
+                review_results = reviews_dataframe.loc[index,result_cols].to_dict()
 
-            print(f"Review {index + 1}/{reviews_count} -> {review_results}")
+                print(f"Review {index + 1}/{reviews_count} -> {review_results}")
+
+    # save reviews with sentiment at end of loop or if there is exception
+    finally:
+        reviews_dataframe.to_csv(output_csv, index=False)
+        print(f"final save with appended sentiment to {output_csv}")
+
+
 
     # print finish message with stats
     analysis_end_time = time.perf_counter()
@@ -194,17 +214,9 @@ def classify_reviews_from_csv(client,
 
     print(f"\ncompleted in {total_classification_time:.3f} seconds, total {total_token_input} tokens inputted and {total_token_output} tokens outputted")
 
-    # save total runtime classification summary report
-
-    # procedurally generate title for output csv if no title is provided
-    if output_csv is None:
-        root, ext = os.path.splitext(input_csv)
-        output_csv = f"{root}_{gpt_model}_sentiment{ext}"
-        # output_summary = f"{root}_{gpt_model}_sentiment_summary{ext}"
-
     # save file
-    reviews_dataframe.to_csv(output_csv,index=False)
-    print(f"saved with appended sentiment to {output_csv}")
+    # reviews_dataframe.to_csv(output_csv,index=False)
+    # print(f"save with appended sentiment to {output_csv}")
 
 
     return output_csv, total_classification_time
