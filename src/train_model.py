@@ -32,8 +32,9 @@ class Sequential(nn.Module):
         x = self.lsm(x)
         return x
 
-def train_model(filepath):
-    print("starting operations\n")
+def train_model(filepath, option):
+
+    print("starting operations")
 
     full_df = pd.read_csv(filepath)
     full_df['encoded_senti'] = LabelEncoder().fit_transform(full_df['sentiment'])
@@ -44,35 +45,31 @@ def train_model(filepath):
     unseen_1 = full_df.loc[full_df['__appid'] == 377160]
     unseen_2 = full_df.loc[full_df['__appid'] == 4000]
     unseen_df = pd.concat([unseen_1, unseen_2])
-    print(unseen_df)
-    # export the test set csv for the LLM
-    unseen_df.to_csv('test_reviews.csv', index=False)
-
 
     # splitting the dataset up
     neg_df = seen_df.loc[seen_df['encoded_senti'] == 0]
     pos_df = seen_df.loc[seen_df['encoded_senti'] == 1]
     pos_df = pos_df.sample(n=neg_df.shape[0], random_state=42)
 
-    '''
-    neg_df = full_df.loc[full_df['encoded_senti'] == 0]
-    pos_df = full_df.loc[full_df['encoded_senti'] == 1]
-    pos_df = pos_df.sample(n=neg_df.shape[0], random_state=42)
-    '''
     np_df = [neg_df, pos_df]
     train_df = pd.concat(np_df)
 
     # TRAINING PREPARATION
     # split into train and test sets with random seed 42
     x_train, x_val, y_train, y_val = train_test_split(
-        train_df['cleaned_review'], train_df['encoded_senti'], test_size=.1, stratify=train_df['sentiment'],
-        random_state=42
+        train_df['cleaned_review'], train_df['encoded_senti'], 
+        test_size=.1, stratify=train_df['sentiment'], random_state=42
     )
 
+    val_size = int(train_df.shape[0]*0.2)
     _, x_test, _, y_test = train_test_split(
-        unseen_df['cleaned_review'], unseen_df['encoded_senti'], test_size=12836, stratify=unseen_df['sentiment'],
-        random_state=42
+        unseen_df['cleaned_review'], unseen_df['encoded_senti'], 
+        test_size=val_size, stratify=unseen_df['sentiment'], random_state=42
     )
+
+    test_df = pd.concat([x_test, y_test], axis=1)
+    # export the test set csv for the LLM
+    # test_df.to_csv('test_reviews.csv', index=False)
 
     '''
     alternative of train-val-test split
@@ -89,7 +86,6 @@ def train_model(filepath):
 
     '''
     print("vectorizing \n")
-    
     
     # convert x_train and x_test to vectors to tensors
     vectorizer = TfidfVectorizer(max_features=3000)
@@ -110,56 +106,81 @@ def train_model(filepath):
     model = Sequential(input_dim)
     criterion = nn.NLLLoss()
 
-    optimizer = optim.Adam(model.parameters(), lr=0.00075)
+    optimizer = optim.Adam(model.parameters(), lr=0.0008)
 
     train_losses = []
     val_losses = []
     val_accuracies = []
     pred_label = []
 
-    print("training and eval: \n")
-    start_time = time.time()
+    if (option == '-t'):
+        print("training and eval: \n")
+        start_time = time.time()
 
-    # training and evaluation
-    epochs = 20
-    for e in range(epochs):
-        model.train()
-        optimizer.zero_grad()
+        # training and evaluation
+        epochs = 15
+        for e in range(epochs):
+            model.train()
+            optimizer.zero_grad()
 
-        output = model.forward(x_train)
-        loss = criterion(output, y_train)
+            output = model.forward(x_train)
+            loss = criterion(output, y_train)
 
-        loss.backward()
-        train_loss = loss.item()
-        train_losses.append(train_loss)
+            loss.backward()
+            train_loss = loss.item()
+            train_losses.append(train_loss)
 
-        optimizer.step()
+            optimizer.step()
+            
+            with torch.no_grad():
+                model.eval()
+                fPass = model(x_val)
+                val_loss = criterion(fPass, y_val)
+                val_losses.append(val_loss)
+
+                newPass = torch.exp(fPass)
+                top_p, top_class = newPass.topk(1, dim=1)
+                equals = top_class == y_val.view(*top_class.shape)
+                val_accuracy = torch.mean(equals.float())
+                val_accuracies.append(val_accuracy)
+
+            print(f"epoch: {e+1}/{epochs}.. ",
+                f"training loss: {train_loss:.3f}.. ",
+                f"val. loss: {val_loss:.3f}.. ",
+                f"val. accuracy: {val_accuracy:.3f}")
+
+        print("\ntime to train and eval: ", str(time.time() - start_time))
+
+        if val_accuracy > 0.85:
+            torch.save(model.state_dict(), "./data/lin_reg_params.pt")
         
-        with torch.no_grad():
-            model.eval()
-            fPass = model(x_val)
-            val_loss = criterion(fPass, y_val)
-            val_losses.append(val_loss)
-
-            newPass = torch.exp(fPass)
-            top_p, top_class = newPass.topk(1, dim=1)
-            equals = top_class == y_val.view(*top_class.shape)
-            val_accuracy = torch.mean(equals.float())
-            val_accuracies.append(val_accuracy)
-
-        print(f"Epoch: {e+1}/{epochs}.. ",
-            f"Training Loss: {train_loss:.3f}.. ",
-            f"Val. Loss: {val_loss:.3f}.. ",
-            f"Val. Accuracy: {val_accuracy:.3f}")
+        # plot losses 
+        plt.figure(figsize=(10,4))
+        plt.plot(train_losses, label='Train Loss')
+        plt.plot(val_losses, label='Test Loss')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.title('Training and Test Loss')
+        plt.legend()
+        plt.savefig('loss_plot.png')
+        
+        # plot test accuracy 
+        plt.figure(figsize=(10,4))
+        plt.plot(val_accuracies, label='Test Accuracy')
+        plt.xlabel('Epoch')
+        plt.ylabel('Accuracy')
+        plt.title('Test Accuracy per Epoch')
+        plt.legend()
+        plt.savefig('test_plot.png')
     
-    print("time to train and eval: ", str(time.time() - start_time))
-    
+    if (option == '-l'):
+        print("loading state dict")
+        model.load_state_dict(torch.load('./data/lin_reg_params.pt'))
+
     # confusion matrix
     with torch.no_grad():
         model.eval()
         fPass = model(x_val)
-        #val_loss = criterion(fPass, y_val)
-        #test_losses.append(test_loss)
 
         newPass = torch.exp(fPass)
         _, top_class = newPass.topk(1, dim=1)
@@ -178,39 +199,27 @@ def train_model(filepath):
     # test model with unseen data
     model.eval()
     output = model(x_test)
-    #print(output)
     output = torch.exp(output)
-    #print(newPass)
     _, top_class = output.topk(1, dim=1)
     pred_label = top_class
     equals = top_class == y_test.view(*top_class.shape)
     test_accuracy = torch.mean(equals.float())
     print("accuracy: ", test_accuracy.item()*100, "%")
 
-
-    # Plot Losses 
-    plt.figure(figsize=(10,4))
-    plt.plot(train_losses, label='Train Loss')
-    plt.plot(val_losses, label='Test Loss')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.title('Training and Test Loss')
-    plt.legend()
-    plt.savefig('loss_plot.png')
-    
-    # Plot Test Accuracy 
-    plt.figure(figsize=(10,4))
-    plt.plot(val_accuracies, label='Test Accuracy')
-    plt.xlabel('Epoch')
-    plt.ylabel('Accuracy')
-    plt.title('Test Accuracy per Epoch')
-    plt.legend()
-    plt.savefig('test_plot.png')
-    
-
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Usage: python train_model.py <input>")
+    if len(sys.argv) != 3:
+        print("Usage: python train_model.py <input> <option> \n" \
+        "options: -l (load model)" \
+        "\n        -t (train model)")
     else:
         filepath = sys.argv[1]
-        train_model(filepath)
+        option = sys.argv[2]
+
+        options = ['-l', '-t']
+        for o in options:
+            if option != o:
+                print("Please enter a valid option!")
+                break
+            else:
+                train_model(filepath, option)
+                break
