@@ -3,7 +3,7 @@ async function predictSentiment() {
   if (!text) return alert("Please enter a review.");
 
   try {
-    const response = await fetch("http://127.0.0.1:8000/predict", {
+    const response = await fetch("http://localhost:8000/predict", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
@@ -47,7 +47,7 @@ async function predictFromAppID() {
   document.getElementById("appid-result").innerHTML = "";
 
   try {
-    const response = await fetch("http://127.0.0.1:8000/predict_from_appid", {
+    const response = await fetch("http://localhost:8000/predict_from_appid", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ appid: parseInt(appidText) }),
@@ -131,25 +131,62 @@ async function loadMetrics() {
   document.getElementById("logistic-features").textContent =
     logistic.num_features;
 
-  // learning_rate
-  document.getElementById("linear-lr").textContent = linear.learning_rate;
-  document.getElementById("logistic-lr").textContent = logistic.learning_rate;
-
-  // Accuracy (backend name: test_accuracy)
-  document.getElementById("linear-acc").textContent =
-    (linear.test_accuracy * 100).toFixed(2) + "%";
-  document.getElementById("logistic-acc").textContent =
-    (logistic.test_accuracy * 100).toFixed(2) + "%";
-
   // Epochs
   document.getElementById("linear-epochs").textContent = linear.epochs;
   document.getElementById("logistic-epochs").textContent = logistic.epochs;
 
-  // Loss (backend name: test_loss)
-  document.getElementById("linear-loss-val").textContent =
-    linear.test_loss.toFixed(4);
-  document.getElementById("logistic-loss-val").textContent =
-    logistic.test_loss.toFixed(4);
+  // learning_rate
+  document.getElementById("linear-lr").textContent = linear.learning_rate;
+  document.getElementById("logistic-lr").textContent = logistic.learning_rate;
+  
+  // train_loss
+  document.getElementById("linear-tl").textContent = linear.train_loss.toFixed(3);
+  document.getElementById("logistic-tl").textContent = logistic.train_loss.toFixed(3);
+
+  // validation_loss
+  document.getElementById("linear-vl").textContent = linear.validation_loss.toFixed(3);
+  document.getElementById("logistic-vl").textContent = logistic.validation_loss.toFixed(3);
+ 
+  // validation_accuracy
+  document.getElementById("linear-va").textContent = (linear.validation_accuracy*100).toFixed(3) + "%";
+  document.getElementById("logistic-va").textContent = (logistic.validation_accuracy*100).toFixed(3) + "%";
+
+
+  // test_accuracy
+  document.getElementById("linear-ta").textContent = (linear.test_accuracy*100).toFixed(3) + "%";
+  document.getElementById("logistic-ta").textContent = (logistic.test_accuracy*100).toFixed(3) + "%";
+
 }
 
 loadMetrics();
+
+window.onload = function () {
+  const imgs = document.querySelectorAll("table img");
+
+  const modal = document.getElementById("img-modal");
+  const modalImg = document.getElementById("modal-img");
+  const closeBtn = document.querySelector(".modal-close");
+
+  imgs.forEach((img) => {
+    img.addEventListener("click", () => {
+      modal.style.display = "block";
+      modalImg.src = img.src;
+    });
+  });
+
+  closeBtn.onclick = function () {
+    modal.style.display = "none";
+  };
+
+  modal.onclick = function (event) {
+    if (event.target === modal) {
+      modal.style.display = "none";
+    }
+  };
+
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") {
+      modal.style.display = "none";
+    }
+  });
+};

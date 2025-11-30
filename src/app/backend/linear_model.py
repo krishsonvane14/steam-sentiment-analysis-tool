@@ -1,15 +1,16 @@
 import pandas as pd
+from sklearn import metrics
 from sklearn.preprocessing import LabelEncoder
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 import torch
 from torch import nn
 from torch import optim
+import matplotlib.pyplot as plt
 import time
 import sys
 import joblib
-import matplotlib.pyplot as plt
-import csv
 
 
 class Sequential(nn.Module):
@@ -34,188 +35,194 @@ def train_model(filepath):
 
     full_df = pd.read_csv(filepath)
     full_df['encoded_senti'] = LabelEncoder().fit_transform(full_df['sentiment'])
-    full_df["cleaned_review"] = full_df["cleaned_review"].astype(str)
+    
+    seen_df = full_df.loc[(full_df['__appid'] != 377160) & (full_df['__appid'] != 4000)]
 
-    pos_df = full_df[full_df["sentiment"] == "positive"].sample(24000, random_state=42)
-    neg_df = full_df[full_df["sentiment"] == "negative"].sample(24000, random_state=42)
-    full_df = pd.concat([pos_df, neg_df], ignore_index=True)
+    unseen_1 = full_df.loc[full_df['__appid'] == 377160]
+    unseen_2 = full_df.loc[full_df['__appid'] == 4000]
+    unseen_df = pd.concat([unseen_1, unseen_2])
+    print(unseen_df)
+    # export the test set csv for the LLM
+    unseen_df.to_csv('test_reviews.csv', index=False)
+    
+    # splitting the dataset up
+    neg_df = seen_df.loc[seen_df['encoded_senti'] == 0]
+    pos_df = seen_df.loc[seen_df['encoded_senti'] == 1]
+    pos_df = pos_df.sample(n=neg_df.shape[0], random_state=42)
+
+    '''
+    neg_df = full_df.loc[full_df['encoded_senti'] == 0]
+    pos_df = full_df.loc[full_df['encoded_senti'] == 1]
+    pos_df = pos_df.sample(n=neg_df.shape[0], random_state=42)
+    '''
+    np_df = [neg_df, pos_df]
+    train_df = pd.concat(np_df)
+
 
     # TRAINING PREPARATION
     # split into train and test sets with random seed 42
     
-    x_train, x_temp, y_train, y_temp = train_test_split(
-        full_df["cleaned_review"],
-        full_df["encoded_senti"],
-        test_size=0.30,
-        stratify=full_df["encoded_senti"],
+    x_train, x_val, y_train, y_val = train_test_split(
+        train_df['cleaned_review'], train_df['encoded_senti'], test_size=.1, stratify=train_df['sentiment'],
         random_state=42
     )
 
-    x_val, x_test, y_val, y_test = train_test_split(
-        x_temp,
-        y_temp,
-        test_size=1/3,
-        stratify=y_temp,
+    _, x_test, _, y_test = train_test_split(
+        unseen_df['cleaned_review'], unseen_df['encoded_senti'], test_size=12836, stratify=unseen_df['sentiment'],
         random_state=42
     )
+    
+    '''
+    alternative of train-val-test split
+    make sure that seen data includes the unseen data
+    x_train, x_val, y_train, y_val = train_test_split(
+        train_df['cleaned_review'], train_df['encoded_senti'], 
+        test_size=.2, stratify=train_df['sentiment'], random_state=42
+    )
+
+    x_train, x_test, y_train, y_test = train_test_split(
+        x_train, y_train, test_size=1./8, stratify=train_df['sentiment'],
+        random_state=42
+    )
+
+    '''
 
     print("vectorizing\n")
     
     # convert x_train and x_test to vectors to tensors
-    vectorizer = TfidfVectorizer(max_features=30000)
-    x_train_vec = vectorizer.fit_transform(x_train)
-    x_val_vec = vectorizer.transform(x_val)
-    x_test_vec = vectorizer.transform(x_test)
+    vectorizer = TfidfVectorizer(max_features=3000)
+    x_train = vectorizer.fit_transform(x_train)
+    x_test = vectorizer.transform(x_test)
+    x_val = vectorizer.transform(x_val)
 
-    # Convert to tensors
-    x_train_t = torch.tensor(x_train_vec.toarray()).float()
-    x_val_t = torch.tensor(x_val_vec.toarray()).float()
-    x_test_t = torch.tensor(x_test_vec.toarray()).float()
+    x_train = torch.tensor(x_train.toarray()).float()
+    x_test = torch.tensor(x_test.toarray()).float()
+    x_val = torch.tensor(x_val.toarray()).float()
 
-    y_train_t = torch.tensor(y_train.values).long()
-    y_val_t = torch.tensor(y_val.values).long()
-    y_test_t = torch.tensor(y_test.values).long()
+    y_train = torch.tensor(y_train.values)
+    y_test = torch.tensor(y_test.values)
+    y_val = torch.tensor(y_val.values)
     
-    print(x_test.shape)
-    print(y_test.shape)
-
     # linear regression
-    input_dim = x_train_t.shape[1]
+    input_dim = x_train.shape[1]
     model = Sequential(input_dim)
     criterion = nn.NLLLoss()
 
-    optimizer = optim.Adam(model.parameters(), lr=0.00075, weight_decay=1e-4)
+    optimizer = optim.Adam(model.parameters(), lr=0.00075)
+
+    train_losses = []
+    val_losses = []
+    val_accuracies = []
+    pred_label = []
 
     print("training and eval: \n")
     start_time = time.time()
 
     # training and evaluation
     epochs = 20
-    print("\nTraining\n")
-    training_loss = []
-    validation_loss = []
-    validation_acc = []
-
     for e in range(epochs):
-        # Training
         model.train()
         optimizer.zero_grad()
 
-        output = model(x_train_t)
-        train_loss = criterion(output, y_train_t)
-        train_loss.backward()
+        output = model.forward(x_train)
+        loss = criterion(output, y_train)
+
+        loss.backward()
+        train_loss = loss.item()
+        train_losses.append(train_loss)
 
         optimizer.step()
-
-        # Validation
-        model.eval()
+        
         with torch.no_grad():
-            val_output = model(x_val_t)
-            val_loss = criterion(val_output, y_val_t)
+            model.eval()
+            fPass = model(x_val)
+            val_loss = criterion(fPass, y_val)
+            val_losses.append(val_loss.item())
 
-            val_preds = torch.argmax(val_output, dim=1)
-            val_acc = (val_preds == y_val_t).float().mean().item()
+            newPass = torch.exp(fPass)
+            top_p, top_class = newPass.topk(1, dim=1)
+            equals = top_class == y_val.view(*top_class.shape)
+            val_accuracy = torch.mean(equals.float())
+            val_accuracies.append(val_accuracy)
 
-        training_loss.append(train_loss.item())
-        validation_loss.append(val_loss.item())
-        validation_acc.append(val_acc)
-
-        print(
-            f"Epoch {e+1}/{epochs}  "
-            f"Train Loss: {train_loss.item():.4f}  "
-            f"Val Loss: {val_loss.item():.4f}  "
-            f"Val Acc: {val_acc:.4f}"
-        )
-
-    print("\nTraining complete\n")
+        print(f"Epoch: {e+1}/{epochs}.. ",
+            f"Training Loss: {train_loss:.3f}.. ",
+            f"Val. Loss: {val_loss:.3f}.. ",
+            f"Val. Accuracy: {val_accuracy:.3f}")
+    
+    print("time to train and eval: ", str(time.time() - start_time))
     
     # Save model and vectorizer
     torch.save(model.state_dict(), "linear_model.pth")
-    joblib.dump(vectorizer, "tfidf_vectorizer_linear.pkl")
+    joblib.dump(vectorizer, "linear_tfidf_vectorizer.pkl")
     
-    # Final test evaluation
-    model.eval()
+    # confusion matrix
     with torch.no_grad():
-        test_output = model(x_test_t)
-        test_loss = criterion(test_output, y_test_t)
-        test_preds = torch.argmax(test_output, dim=1)
-        test_acc = (test_preds == y_test_t).float().mean().item()
+        model.eval()
+        fPass = model(x_val)
+        # val_loss = criterion(fPass, y_val)
+        # test_losses.append(test_loss)
 
-    print(f"Test Loss: {test_loss.item():.4f}")
-    print(f"Test Accuracy: {test_acc*100:.2f}%")
+        newPass = torch.exp(fPass)
+        _, top_class = newPass.topk(1, dim=1)
+        pred_label = top_class
+        equals = top_class == y_val.view(*top_class.shape)
+        val_accuracy = torch.mean(equals.float())
+        val_accuracies.append(val_accuracy)
+
+    cm = confusion_matrix(y_val, pred_label)
+    disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=["Negative", "Positive"])
+    disp.plot(cmap="Blues")
+    plt.title(f"Confusion Matrix")
+    plt.grid(False)
+    plt.savefig('linear_confusion_matrix.png')
+
+    # test model with unseen data
+    with torch.no_grad():
+        model.eval()
+        output = model(x_test)
+        output = torch.exp(output)
+        _, top_class = output.topk(1, dim=1)
+        pred_label = top_class
+        equals = top_class == y_test.view(*top_class.shape)
+        test_accuracy = torch.mean(equals.float())
     
-    
-    # Plot training curve
-    plt.figure(figsize=(6, 5))
-    plt.plot(training_loss, label="Train Loss")
-    plt.plot(validation_loss, label="Validation Loss")
-    plt.title("Training and Validation Loss")
-    plt.xlabel("Epoch")
-    plt.ylabel("Loss")
+    print("accuracy: ", test_accuracy.item()*100, "%")
+
+    # Plot Losses 
+    plt.figure(figsize=(10,4))
+    plt.plot(train_losses, label='Train Loss')
+    plt.plot(val_losses, label='Validation Loss')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.title('Linear Model Training and Validation Loss')
     plt.legend()
-    plt.grid()
-    plt.savefig("linear_plot.png")
-    plt.close()
-
-    # Confusion matrix
-    y_true = y_test_t.numpy()
-    y_pred = test_preds.numpy()
-
-    TP = int(((y_pred == 1) & (y_true == 1)).sum())
-    TN = int(((y_pred == 0) & (y_true == 0)).sum())
-    FP = int(((y_pred == 1) & (y_true == 0)).sum())
-    FN = int(((y_pred == 0) & (y_true == 1)).sum())
-
-    cm = [[TN, FP],
-          [FN, TP]]
-
-    # Plot confusion matrix
-    plt.figure(figsize=(6, 5))
-    plt.imshow(cm, cmap="Blues")
-    plt.title("Confusion Matrix")
-    plt.xlabel("Predicted")
-    plt.ylabel("Actual")
-    plt.xticks([0, 1], ["Negative", "Positive"])
-    plt.yticks([0, 1], ["Negative", "Positive"])
-
-    for i in range(2):
-        for j in range(2):
-            plt.text(j, i, cm[i][j], ha="center", va="center", fontsize=14)
-
-    plt.colorbar()
-    plt.savefig("linear_confusion_matrix.png")
+    plt.savefig('linear_loss_plot.png')
     plt.close()
     
-    # Save training info to CSV
+    # Plot Test Accuracy 
+    plt.figure(figsize=(10,4))
+    plt.plot(val_accuracies, label='Validation Accuracy')
+    plt.xlabel('Epoch')
+    plt.ylabel('Accuracy')
+    plt.title('Linear Model Validation Accuracy per Epoch')
+    plt.legend()
+    plt.savefig('linear_accuracy_plot.png')
+    plt.close()
+    
+    # Save to CSV
     metrics = {
-        "model_type": "linear",
-        "features": x_train_t.shape[1],
+        "model_type": "logistic_regression",
+        "features": x_train.shape[1],
         "epochs": epochs,
         "learning_rate": 0.00075,
-        "test_loss": float(test_loss.item()),
-        "test_accuracy": float(test_acc),
-        "true_negative": TN,
-        "false_positive": FP,
-        "false_negative": FN,
-        "true_positive": TP,
+        "train_loss": float(train_losses[-1]),
+        "validation_loss": float(val_losses[-1]),
+        "validation_accuracy": float(val_accuracies[-1]),
+        "test_accuracy": float(test_accuracy.item())
     }
-
-    csv_path = "linear_model_metrics.csv"
-    file_exists = False
-    try:
-        with open(csv_path, "r"):
-            file_exists = True
-    except FileNotFoundError:
-        file_exists = False
-
-    with open(csv_path, "w", newline="") as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=metrics.keys())
-
-        if not file_exists:
-            writer.writeheader()
-
-        writer.writerow(metrics)
-
+    
+    pd.DataFrame([metrics]).to_csv("linear_metrics.csv", index=False)
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
@@ -223,4 +230,4 @@ if __name__ == "__main__":
     else:
         filepath = sys.argv[1]
         train_model(filepath)
-        
+

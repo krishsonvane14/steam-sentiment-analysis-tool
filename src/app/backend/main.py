@@ -6,8 +6,8 @@ import torch
 import joblib
 import pandas as pd
 import re
-from logistic_model import LogisticRegressionModel
-from linear_model import Sequential
+from .logistic_model import LogisticRegressionModel
+from .linear_model import Sequential
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
@@ -28,18 +28,19 @@ app.add_middleware(
 )
 
 # Load vectorizer
-logistic_vectorizer = joblib.load("tfidf_vectorizer.pkl")
-linear_vectorizer = joblib.load("tfidf_vectorizer_linear.pkl")
+BASE_DIR = os.path.dirname(__file__)
+logistic_vectorizer = joblib.load(os.path.join(BASE_DIR, "logistic_tfidf_vectorizer.pkl"))
+linear_vectorizer = joblib.load(os.path.join(BASE_DIR, "linear_tfidf_vectorizer.pkl"))
 
 # Build model
 logistic_input_dim = len(logistic_vectorizer.get_feature_names_out())
 logistic_model = LogisticRegressionModel(logistic_input_dim)
-logistic_model.load_state_dict(torch.load("logistical_model.pth", map_location="cpu"))
+logistic_model.load_state_dict(torch.load(os.path.join(BASE_DIR, "logistic_model.pth"), map_location="cpu"))
 logistic_model.eval()
 
 linear_input_dim = len(linear_vectorizer.get_feature_names_out())
 linear_model = Sequential(linear_input_dim)
-linear_model.load_state_dict(torch.load("linear_model.pth", map_location="cpu"))
+linear_model.load_state_dict(torch.load(os.path.join(BASE_DIR, "linear_model.pth"), map_location="cpu"))
 linear_model.eval()
 
 class ReviewRequest(BaseModel):
@@ -105,8 +106,8 @@ def root():
 @app.get("/metrics")
 def get_metrics():
     try:
-        linear_df = pd.read_csv("linear_model_metrics.csv", header=None)
-        logistic_df = pd.read_csv("logistic_model_metrics.csv", header=None)
+        linear_df = pd.read_csv(os.path.join(BASE_DIR,"linear_metrics.csv"), header=None, skiprows=1)
+        logistic_df = pd.read_csv(os.path.join(BASE_DIR, "logistic_metrics.csv"), header=None, skiprows=1)
     except Exception as e:
         return {"error": str(e)}
 
@@ -118,16 +119,14 @@ def get_metrics():
 
     def parse(vals):
         return {
-            "model_name": vals[0],
+            "model_type": vals[0],
             "num_features": vals[1],
             "epochs": vals[2],
             "learning_rate": vals[3],
-            "test_loss": vals[4],
-            "test_accuracy": vals[5],
-            "tn": vals[6],
-            "fp": vals[7],
-            "fn": vals[8],
-            "tp": vals[9]
+            "train_loss": vals[4],
+            "validation_loss": vals[5],
+            "validation_accuracy": vals[6],
+            "test_accuracy": vals[7]
         }
 
     return {
@@ -207,30 +206,44 @@ def predict_from_appid(req: AppIdRequest):
         "reviews": results
     }
     
-@app.get("/linear_training_plot.png")
-def get_linear_plot():
-    path = "linear_plot.png"
+@app.get("/linear_loss_plot.png")
+def get_linear_loss_plot():
+    path = os.path.join(BASE_DIR, "linear_loss_plot.png")
     if not os.path.exists(path):
         return {"error": f"{path} not found"}
     return FileResponse(path, media_type="image/png")
 
-@app.get("/logistic_training_plot.png")
-def get_logistic_plot():
-    path = "logistic_plot.png"
+@app.get("/linear_accuracy_plot.png")
+def get_linear_acc_plot():
+    path = os.path.join(BASE_DIR, "linear_accuracy_plot.png")
     if not os.path.exists(path):
         return {"error": f"{path} not found"}
     return FileResponse(path, media_type="image/png")
 
 @app.get("/linear_confusion_matrix.png")
 def get_linear_cm():
-    path = "linear_confusion_matrix.png"
+    path = os.path.join(BASE_DIR, "linear_confusion_matrix.png")
+    if not os.path.exists(path):
+        return {"error": f"{path} not found"}
+    return FileResponse(path, media_type="image/png")
+
+@app.get("/logistic_loss_plot.png")
+def get_logistic_loss_plot():
+    path = os.path.join(BASE_DIR, "logistic_loss_plot.png")
+    if not os.path.exists(path):
+        return {"error": f"{path} not found"}
+    return FileResponse(path, media_type="image/png")
+
+@app.get("/logistic_accuracy_plot.png")
+def get_logistic_acc_plot():
+    path = os.path.join(BASE_DIR, "logistic_accuracy_plot.png")
     if not os.path.exists(path):
         return {"error": f"{path} not found"}
     return FileResponse(path, media_type="image/png")
 
 @app.get("/logistic_confusion_matrix.png")
 def get_logistic_cm():
-    path = "logistic_confusion_matrix.png"
+    path = os.path.join(BASE_DIR, "logistic_confusion_matrix.png")
     if not os.path.exists(path):
         return {"error": f"{path} not found"}
     return FileResponse(path, media_type="image/png")

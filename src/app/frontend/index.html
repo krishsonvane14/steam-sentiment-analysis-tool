@@ -8,10 +8,15 @@
 
     </head>
 
+    <div id="img-modal" class="modal">
+        <span class="modal-close">&times;</span>
+        <img class="modal-content" id="modal-img">
+    </div>
+
     <body>
         <h1>Steam Review Sentiment Tool</h1>
         <div class="plots">
-            <h1>About our models</h1>
+            <h2>About our models</h2>
             <table>
                 <tr>
                     <th></th>
@@ -30,6 +35,13 @@
                     <td id="linear-features"></td>
                     <td id="logistic-features"></td>
                 </tr>
+
+                <tr>
+                    <th>Epochs</th>
+                    <td id="linear-epochs"></td>
+                    <td id="logistic-epochs"></td>
+                </tr>
+
                 <tr>
                     <th>Loss Function</th>
                     <td>NLLLoss</td>
@@ -49,23 +61,43 @@
                 </tr>
 
                 <tr>
-                    <th>Epochs</th>
-                    <td id="linear-epochs"></td>
-                    <td id="logistic-epochs"></td>
+                    <th>Training Loss</th>
+                    <td id="linear-tl"></td>
+                    <td id="logistic-tl"></td>
                 </tr>
                 <tr>
-                    <th>Accuracy</th>
-                    <td id="linear-acc">Loading...</td>
-                    <td id="logistic-acc">Loading...</td>
+                    <th>Validation Loss</th>
+                    <td id="linear-vl"></td>
+                    <td id="logistic-vl"></td>
+                </tr>
+                <tr>
+                    <th>Validation Accuracy</th>
+                    <td id="linear-va"></td>
+                    <td id="logistic-va"></td>
+                </tr>
+                <tr>
+                    <th>Test Accuracy</th>
+                    <td id="linear-ta"></td>
+                    <td id="logistic-ta"></td>
                 </tr>
 
                 <tr>
-                    <th>Loss over time</th>
+                    <th>Loss over Epochs</th>
                     <td><img id="linear-loss"
-                            src="http://localhost:8000/linear_training_plot.png"
+                            src="http://localhost:8000/linear_loss_plot.png"
                             width="360"></td>
                     <td><img id="logistic-loss"
-                            src="http://localhost:8000/logistic_training_plot.png"
+                            src="http://localhost:8000/logistic_loss_plot.png"
+                            width="360"></td>
+                </tr>
+
+                <tr>
+                    <th>Accuracy over Epochs</th>
+                    <td><img id="linear-accuracy"
+                            src="http://localhost:8000/linear_accuracy_plot.png"
+                            width="360"></td>
+                    <td><img id="logistic-accuracy"
+                            src="http://localhost:8000/logistic_accuracy_plot.png"
                             width="360"></td>
                 </tr>
 
