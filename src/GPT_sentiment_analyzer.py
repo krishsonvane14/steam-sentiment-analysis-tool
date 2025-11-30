@@ -310,13 +310,13 @@ def evaluate_sentiment_classified_csv(csv_to_eval_path,
         # classification report
         class_report_df = compute_classification_report(actual=actual_sentiment_values, predicted=predicted_sentiment_values, labels=list(BINARY_LABEL_MAPPING.keys()))
         class_report_path = f"{eval_root}_{group_name}_classification_report_{timestamp}.csv"
-        class_report_df.to_csv(class_report_path, index=False)
+        class_report_df.to_csv(class_report_path, index=True)
         print(f"Classification report for {group_name}:\n{class_report_df.transpose().to_string(float_format="%.3f")}\n")
 
         # GPT API stats
         stats_df = compute_gpt_response_stats(subset_df,input_tokens_col,output_tokens_col,response_time_col,"total_tokens")
         stats_path = f"{eval_root}_{group_name}_api_stats_{timestamp}.csv"
-        stats_df.to_csv(stats_path, index=False)
+        stats_df.to_csv(stats_path, index=True)
         print(f"Statistics report for {group_name}:\n{stats_df.to_string(float_format="%.3f")}\n")
 
         # add paths to dictionary
