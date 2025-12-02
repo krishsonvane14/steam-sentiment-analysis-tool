@@ -122,22 +122,22 @@ def classify_reviews_from_csv(client,
                               output_csv=None,
                               review_col="cleaned_review",
                               gpt_sentiment_col = "gpt_sentiment",
-                              norm_gpt_sentiment_col = "gpt_sentiment_norm",
+                              gpt_sentiment_norm_col ="gpt_sentiment_norm",
                               input_tokens_col = "input_tokens",
                               output_tokens_col = "output_tokens",
                               response_time_col = "response_time",
-                              reviewer_sentiment_col = "sentiment",
+                              reviewer_sentiment_col = "encoded_senti",
                               reviewer_sentiment_norm_col = "sentiment_norm",
                               reviews_limit=None,
                               save_increment = 20,
-                              progress_interval = 10):
+                              progress_interval = 1):
 
     # procedurally generate title for output csv if no title is provided
     if output_csv is None:
         root, ext = os.path.splitext(input_csv)
         output_csv = f"{root}_{gpt_model}_sentiment{ext}"
 
-    reviews_dataframe = pd.read_csv(input_csv)
+    reviews_dataframe = pd.read_csv(input_csv, encoding="utf-8")
 
     # check csv for correct columns
     if review_col not in reviews_dataframe.columns:
@@ -149,19 +149,20 @@ def classify_reviews_from_csv(client,
     if reviews_limit is not None:
         reviews_dataframe = reviews_dataframe.head(reviews_limit)
 
+
     # add normalized user_reviews column
-    reviewer_sentiment_col_idx = reviews_dataframe.columns.get_loc(reviewer_sentiment_col)
-    reviews_dataframe.insert(reviewer_sentiment_col_idx + 1, reviewer_sentiment_norm_col, reviews_dataframe[reviewer_sentiment_col].apply(normalize_binary_label))
+    # reviewer_sentiment_col_idx = reviews_dataframe.columns.get_loc(reviewer_sentiment_col)
+    # reviews_dataframe.insert(reviewer_sentiment_col_idx + 1, reviewer_sentiment_norm_col, reviews_dataframe[reviewer_sentiment_col].apply(normalize_binary_label))
 
     reviews_count = len(reviews_dataframe)
     print(f"Analyzing Sentiment of {reviews_count} reviews from {input_csv} using {gpt_model}")
 
     # add new columns to dataframe
     reviews_dataframe[gpt_sentiment_col] = None
-    reviews_dataframe[norm_gpt_sentiment_col] = 0
+    reviews_dataframe[gpt_sentiment_norm_col] = None
     reviews_dataframe[input_tokens_col] = 0
     reviews_dataframe[output_tokens_col] = 0
-    reviews_dataframe[response_time_col] = 0
+    reviews_dataframe[response_time_col] = 0.0
 
     analysis_start_time = time.perf_counter()
 
@@ -179,7 +180,7 @@ def classify_reviews_from_csv(client,
                     numeric_sentiment = None
 
                 reviews_dataframe.loc[index, gpt_sentiment_col] = sentiment_result.sentiment
-                reviews_dataframe.loc[index, norm_gpt_sentiment_col] = numeric_sentiment
+                reviews_dataframe.loc[index, gpt_sentiment_norm_col] = numeric_sentiment
                 reviews_dataframe.loc[index, input_tokens_col] = sentiment_result.input_tokens_count
                 reviews_dataframe.loc[index, output_tokens_col] = sentiment_result.output_tokens_count
                 reviews_dataframe.loc[index, response_time_col] = sentiment_result.response_time
@@ -187,6 +188,12 @@ def classify_reviews_from_csv(client,
             except Exception as e:
                 print(f"[ERROR] row {index}: {e}")
                 reviews_dataframe.loc[index, gpt_sentiment_col] = "error"
+                reviews_dataframe.loc[index, gpt_sentiment_norm_col] = None
+                reviews_dataframe.loc[index, input_tokens_col] = 0
+                reviews_dataframe.loc[index, output_tokens_col] = 0
+                reviews_dataframe.loc[index, response_time_col] = 0.0
+
+                continue
 
             # periodic save
             if (index + 1) % save_increment == 0 or index + 1 == reviews_count:
@@ -195,7 +202,7 @@ def classify_reviews_from_csv(client,
 
 
             if (index + 1) % progress_interval == 0 or index + 1 == reviews_count:
-                result_cols = [gpt_sentiment_col, norm_gpt_sentiment_col, input_tokens_col, output_tokens_col, response_time_col]
+                result_cols = [gpt_sentiment_col, gpt_sentiment_norm_col, input_tokens_col, output_tokens_col, response_time_col]
                 review_results = reviews_dataframe.loc[index,result_cols].to_dict()
 
                 print(f"Review {index + 1}/{reviews_count} -> {review_results}")
@@ -252,7 +259,7 @@ def compute_classification_report(actual, predicted, labels):
 
 
 def evaluate_sentiment_classified_csv(csv_to_eval_path,
-                                      actual_sentiment_col ="sentiment_norm",
+                                      actual_sentiment_col ="encoded_senti",
                                       predicted_sentiment_col ="gpt_sentiment_norm",
                                       input_tokens_col = "input_tokens",
                                       output_tokens_col = "output_tokens",
@@ -269,10 +276,21 @@ def evaluate_sentiment_classified_csv(csv_to_eval_path,
         if column not in eval_df.columns:
             raise ValueError(f"column {column} not in {csv_to_eval_path}")
 
+    # remove rows where GPT sentiment is None
+    valid_df = eval_df[eval_df[predicted_sentiment_col].notna()].copy()
+    failed_df = eval_df[eval_df[predicted_sentiment_col].isna()].copy()
+
     eval_root, eval_ext = os.path.splitext(csv_to_eval_path)
 
     # generate timestamp
     timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
+
+    # report and save failed rows
+    if len(failed_df) > 0:
+        failed_path = f"{eval_root}_failed_rows_{timestamp}.csv"
+        failed_df.to_csv(failed_path, index=False)
+
+        print(f" Dropped {len(failed_df)} of {len(eval_df)} rows in {predicted_sentiment_col} with None sentiment before evaluation\nSaved dropped rows to {failed_path}")
 
     # dictionary for returned paths
     evaluation_reports_paths = {}
@@ -288,10 +306,10 @@ def evaluate_sentiment_classified_csv(csv_to_eval_path,
 
     for group in groups:
         if group is None:
-            subset_df = eval_df
-            group_name = "all"
+            subset_df = valid_df
+            group_name = "All"
         else:
-            subset_df = eval_df[eval_df[group_col] == group]
+            subset_df = valid_df[valid_df[group_col] == group]
             group_name = str(group)
 
         print(f"Generating reports for {group_name}\n")
@@ -413,7 +431,7 @@ def evaluate_sentiment_classifier_from_csv(input_csv,
     return sentiment_confusion_matrix, output_csv
 
 
-def generate_reviews_sample_csv(input_csv, size = 100, random_state=49,stratified_by=None, output_csv=None):
+def generate_reviews_sample_csv(input_csv, size = 100, random_state=42,stratified_by=None, output_csv=None):
     reviews_dataframe = pd.read_csv(input_csv)
 
     sample, _ = skl.model_selection.train_test_split(
@@ -450,7 +468,7 @@ def build_parser():
     classify_parser.add_argument("csv_to_classify", help="the name of the csv with reviews to classify")
     classify_parser.add_argument("--reviews_col", default="cleaned_review",
                                  help="the name of the column in the csv with review text to classify")
-    classify_parser.add_argument("--reviewer_sentiment_col", default="sentiment")
+    classify_parser.add_argument("--reviewer_sentiment_col", default="encoded_senti")
     classify_parser.add_argument("--model", default="gpt-5-nano")
     classify_parser.add_argument("--limit", type=int, default=None)
     classify_parser.add_argument("--o", default=None)
@@ -464,7 +482,7 @@ def build_parser():
     sampling_parser = subparsers.add_parser("sample", help="sample reviews from a dataset")
     sampling_parser.add_argument("csv_to_sample", help="the name of the csv with reviews to sample")
     sampling_parser.add_argument("--size", type=int, default=100, help="number of reviews to sample")
-    sampling_parser.add_argument("--random", type=int, default=49, help="random seed for sampling")
+    sampling_parser.add_argument("--random", type=int, default=42, help="random seed for sampling")
     sampling_parser.add_argument("--stratify", type=str, default=None, help="stratification value")
 
     return parser
