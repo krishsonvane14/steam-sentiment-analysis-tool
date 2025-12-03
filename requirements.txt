@@ -3,3 +3,12 @@ pandas
 python-dotenv
 openai
 json
+jsonlines
+scikit-learn
+torch
+numpy
+matplotlib
+joblib
+fastapi
+uvicorn
+pydantic
