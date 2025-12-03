@@ -1,5 +1,4 @@
 import argparse
-import json
 import os
 import time
 import typing
@@ -20,14 +19,11 @@ class SentimentResult(typing.NamedTuple):
     output_tokens_count: int
     response_time: float
 
-# fake_reviews = ["Great story and music.", "This game crashes constantly.","Pretty good but too short.", "Horrible, do not play ever!"]
-
 # load local environment
 load_dotenv()
 
 # apply api key and create open AI client
 openai_api_key = os.getenv("OPENAI_API_KEY")
-
 openai_client = OpenAI(api_key=openai_api_key)
 
 def single_analyze_sentiment(client, review_text, model="gpt-5-nano", max_retries = 5, retry_sleep = 1, prompt_content = None, sentiment_labels=None):
@@ -73,32 +69,9 @@ def single_analyze_sentiment(client, review_text, model="gpt-5-nano", max_retrie
 
     return None
 
-
-def classify_from_jsonl(input_jsonl, output_path=None, limit=None, api_call_delay=0.3):
-
-    # load the reviews
-    with open(input_jsonl, "r", encoding="utf-8") as reviews_file:
-        for index, line in enumerate(reviews_file):
-            if limit and index >= limit:
-                break
-
-            review = json.loads(line)
-            review_text = review.get("review","")
-            voted_up = review.get("voted_up","")
-            title = review.get("title","")
-
-            review_sentiment = single_analyze_sentiment(review_text)
-
-            print(f"[{index+1}] GPT-Sentiment: {review_sentiment}, Positive Review: {voted_up}")
-            time.sleep(api_call_delay)
-
-    return
-
 def normalize_binary_label(label):
     """
     converts a binary label to 1 for a positive result and 0 for a negative result
-    :param label:
-    :return:
     """
 
     if label is None:
@@ -212,8 +185,6 @@ def classify_reviews_from_csv(client,
         reviews_dataframe.to_csv(output_csv, index=False)
         print(f"final save with appended sentiment to {output_csv}")
 
-
-
     # print finish message with stats
     analysis_end_time = time.perf_counter()
     total_classification_time = analysis_end_time - analysis_start_time
@@ -221,11 +192,6 @@ def classify_reviews_from_csv(client,
     total_token_output = reviews_dataframe[output_tokens_col].sum()
 
     print(f"\ncompleted in {total_classification_time:.3f} seconds, total {total_token_input} tokens inputted and {total_token_output} tokens outputted")
-
-    # save file
-    # reviews_dataframe.to_csv(output_csv,index=False)
-    # print(f"save with appended sentiment to {output_csv}")
-
 
     return output_csv, total_classification_time
 
@@ -303,7 +269,6 @@ def evaluate_sentiment_classified_csv(csv_to_eval_path,
         print(f"Evaluating sentiment classification in {csv_to_eval_path} for all reviews")
 
     # loop through groups to generate reports
-
     for group in groups:
         if group is None:
             subset_df = valid_df
@@ -346,91 +311,6 @@ def evaluate_sentiment_classified_csv(csv_to_eval_path,
 
     return evaluation_reports_paths
 
-
-DEFAULT_BINARY_LABELS = [0,1]
-label_mapping = {0: "negative", 1: "positive"}
-
-def evaluate_sentiment_classifier_from_csv(input_csv,
-                                           actual_sentiment_col="sentiment_norm",
-                                           predicted_sentiment_col="gpt_sentiment_norm",
-                                           input_tokens_col="input_tokens",
-                                           output_tokens_col="output_tokens",
-                                           response_time_col="response_time",
-                                           total_tokens_col="total_tokens"):
-
-    root, ext = os.path.splitext(input_csv)
-
-    # load the csv and check it has the appropriate columns
-    classified_df = pd.read_csv(input_csv)
-
-    required_columns = [actual_sentiment_col, predicted_sentiment_col, input_tokens_col, output_tokens_col, response_time_col]
-
-    for column in required_columns:
-        if column not in classified_df.columns:
-            raise ValueError(f"column {column} not in {input_csv}")
-
-
-    # extract sentiments
-    actual_sentiments = classified_df[actual_sentiment_col].tolist()
-    predicted_sentiments = classified_df[predicted_sentiment_col].tolist()
-
-    # calculate confusion matrix
-    sentiment_confusion_matrix = skl.metrics.confusion_matrix(actual_sentiments, predicted_sentiments, labels=DEFAULT_BINARY_LABELS)
-
-    # confusion matrix to console
-    print(sentiment_confusion_matrix)
-
-    # plot and save confusion matrix
-    confusion_matrix_display = skl.metrics.ConfusionMatrixDisplay(confusion_matrix=sentiment_confusion_matrix, display_labels=label_mapping.values())
-    confusion_matrix_display.plot(cmap="greens")
-    plt.title(f"Confusion Matrix for {actual_sentiment_col} and {predicted_sentiment_col} in {input_csv}")
-    plt.grid(False)
-    plt.savefig(f"{root}_{actual_sentiment_col}_{predicted_sentiment_col}_confusion_matrix.png")
-
-
-    sentiment_report = skl.metrics.classification_report(actual_sentiments, predicted_sentiments, labels=DEFAULT_BINARY_LABELS,output_dict=True)
-
-    sentiment_report_df = pd.DataFrame(sentiment_report).transpose()
-
-
-    classified_df[total_tokens_col] = classified_df[input_tokens_col] + classified_df[output_tokens_col]
-
-    gpt_statistics = {
-        "sum": [classified_df[response_time_col].sum(), classified_df[input_tokens_col].sum(), classified_df[output_tokens_col].sum(), classified_df[total_tokens_col].sum()],
-        "mean": [classified_df[response_time_col].mean(), classified_df[input_tokens_col].mean(), classified_df[output_tokens_col].mean(), classified_df[total_tokens_col].mean()],
-        "median": [classified_df[response_time_col].median(), classified_df[input_tokens_col].median(), classified_df[output_tokens_col].median(), classified_df[total_tokens_col].median()],
-        "min": [classified_df[response_time_col].min(), classified_df[input_tokens_col].min(), classified_df[output_tokens_col].min(), classified_df[total_tokens_col].min()],
-        "max": [classified_df[response_time_col].max(), classified_df[input_tokens_col].max(), classified_df[output_tokens_col].max(), classified_df[total_tokens_col].max()],
-    }
-
-    # generate statistics report name
-    api_statistics_summary_df = pd.DataFrame(gpt_statistics, index=[response_time_col, input_tokens_col, output_tokens_col, total_tokens_col])
-
-    statistics_report_path = root + "_statistics" + ext
-    api_statistics_summary_df.to_csv(statistics_report_path)
-
-    print(f"statistics report saved to {statistics_report_path}")
-
-
-    # print confusion matrix and classification report to console
-    print(f"Confusion Matrix for {input_csv}")
-    print(sentiment_confusion_matrix)
-
-    print(f"\nClassification Report for {input_csv}")
-    print(sentiment_report_df.to_string(float_format="%.3f"))
-
-    # save classification report
-
-    root, ext = os.path.splitext(input_csv)
-    output_csv = root + "_report" + ext
-
-    sentiment_report_df.to_csv(output_csv, index=True)
-    print(f"\nreport saved to {output_csv}")
-
-
-    return sentiment_confusion_matrix, output_csv
-
-
 def generate_reviews_sample_csv(input_csv, size = 100, random_state=42,stratified_by=None, output_csv=None):
     reviews_dataframe = pd.read_csv(input_csv)
 
@@ -456,7 +336,6 @@ def generate_reviews_sample_csv(input_csv, size = 100, random_state=42,stratifie
 def per_app_metrics(classified_df):
     return None
 
-
 # define the parser for the command line execution
 def build_parser():
     parser = argparse.ArgumentParser(description="GPT_sentiment_analyzer CLI")
@@ -466,8 +345,7 @@ def build_parser():
     # classification commands
     classify_parser = subparsers.add_parser("classify", help="classify reviews with GPT model")
     classify_parser.add_argument("csv_to_classify", help="the name of the csv with reviews to classify")
-    classify_parser.add_argument("--reviews_col", default="cleaned_review",
-                                 help="the name of the column in the csv with review text to classify")
+    classify_parser.add_argument("--reviews_col", default="cleaned_review", help="the name of the column in the csv with review text to classify")
     classify_parser.add_argument("--reviewer_sentiment_col", default="encoded_senti")
     classify_parser.add_argument("--model", default="gpt-5-nano")
     classify_parser.add_argument("--limit", type=int, default=None)
@@ -476,6 +354,9 @@ def build_parser():
     # evaluation commands
     evaluate_parser = subparsers.add_parser("evaluate", help="evaluate sentiment classification results from csv")
     evaluate_parser.add_argument("csv_to_evaluate", help="the name of the csv with sentiment classification results to evaluate")
+    evaluate_parser.add_argument("--actual_sentiment_col", default="encoded_senti")
+    evaluate_parser.add_argument("--predicted_sentiment_col", default="gpt_sentiment_norm")
+    evaluate_parser.add_argument("--model", default="gpt-5-nano")
     evaluate_parser.add_argument("--by", default=None, help="make separate evaluation reports for each unique item in this column of the dataset")
 
     # sampling commands
@@ -504,6 +385,8 @@ def main ():
                                                   )
     elif args.command == "evaluate":
         report_paths = evaluate_sentiment_classified_csv(csv_to_eval_path=args.csv_to_evaluate,
+                                                         actual_sentiment_col=args.actual_sentiment_col,
+                                                         predicted_sentiment_col=args.predicted_sentiment_col,
                                                          group_col=args.by)
 
     elif args.command == "sample":
@@ -511,7 +394,6 @@ def main ():
                                                  size=args.size,
                                                  random_state=args.random,
                                                  stratified_by=args.stratify)
-
 
 if __name__ == "__main__":
     main()
