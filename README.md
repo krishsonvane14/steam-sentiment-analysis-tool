@@ -4,6 +4,26 @@ Sentiment analysis tool for Steam game reviews. Fetches real user reviews using 
 
 ---
 
+# Main Linear Model
+
+## Training Model
+
+To run the main model
+
+```
+cd src/
+python ./train_model.py <input_csv> -<flag>
+```
+
+Arguments
+
+- <input_csv>: Path to the cleaned CSV file containing the reviews (e.g., ./data/cleaned_reviews.csv)
+- <flag>: Choose a flag
+  - `-t`: train the model from scratch.
+  - `-l`: load the weights from training.
+
+---
+
 # Web App
 
 ## Features
