@@ -1,2 +1,12 @@
 requests
 pandas
+jsonlines
+scikit-learn
+torch
+numpy
+matplotlib
+joblib
+fastapi
+uvicorn
+pydantic
+

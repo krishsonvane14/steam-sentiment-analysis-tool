@@ -1,0 +1,2 @@
+model_type,features,epochs,learning_rate,train_loss,validation_loss,validation_accuracy,test_accuracy
+logistic_regression,3000,20,0.00075,0.6856876611709595,0.6856292486190796,0.789670467376709,0.7563104033470154
