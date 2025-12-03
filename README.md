@@ -17,8 +17,8 @@ python ./train_model.py <input_csv> -<flag>
 
 Arguments
 
-- <input_csv>: Path to the cleaned CSV file containing the reviews (e.g., ./data/cleaned_reviews.csv)
-- <flag>: Choose a flag
+- `<input_csv>`: Path to the cleaned CSV file containing the reviews (e.g., ./data/cleaned_reviews.csv)
+- `<flag>`: Choose a flag
   - `-t`: train the model from scratch.
   - `-l`: load the weights from training.
 
