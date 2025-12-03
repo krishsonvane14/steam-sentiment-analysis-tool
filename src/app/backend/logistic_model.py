@@ -28,15 +28,16 @@ def logistical_regression(csv_filepath):
     full_df = pd.read_csv(csv_filepath)
     full_df['encoded_senti'] = LabelEncoder().fit_transform(full_df['sentiment'])
     
-    seen_df = full_df.loc[full_df['__appid'] != 377160]
-    seen_df = seen_df.loc[full_df['__appid'] != 4000]
+    seen_df = full_df.loc[(full_df['__appid'] != 377160) & (full_df['__appid'] != 4000)]
 
     unseen_1 = full_df.loc[full_df['__appid'] == 377160]
     unseen_2 = full_df.loc[full_df['__appid'] == 4000]
     unseen_df = pd.concat([unseen_1, unseen_2])
-    print(unseen_df)
+    
+    # print(unseen_df)
+
     # export the test set csv for the LLM
-    unseen_df.to_csv('test_reviews.csv', index=False)
+    # unseen_df.to_csv('test_reviews.csv', index=False)
     
     # splitting the dataset up
     neg_df = seen_df.loc[seen_df['encoded_senti'] == 0]
@@ -50,7 +51,6 @@ def logistical_regression(csv_filepath):
     '''
     np_df = [neg_df, pos_df]
     train_df = pd.concat(np_df)
-
 
     # TRAINING PREPARATION
     # split into train and test sets with random seed 42

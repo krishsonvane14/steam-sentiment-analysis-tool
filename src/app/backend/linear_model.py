@@ -1,5 +1,4 @@
 import pandas as pd
-from sklearn import metrics
 from sklearn.preprocessing import LabelEncoder
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import train_test_split
@@ -41,9 +40,11 @@ def train_model(filepath):
     unseen_1 = full_df.loc[full_df['__appid'] == 377160]
     unseen_2 = full_df.loc[full_df['__appid'] == 4000]
     unseen_df = pd.concat([unseen_1, unseen_2])
-    print(unseen_df)
+
+    # print(unseen_df)
+
     # export the test set csv for the LLM
-    unseen_df.to_csv('test_reviews.csv', index=False)
+    # unseen_df.to_csv('test_reviews.csv', index=False)
     
     # splitting the dataset up
     neg_df = seen_df.loc[seen_df['encoded_senti'] == 0]
@@ -58,18 +59,17 @@ def train_model(filepath):
     np_df = [neg_df, pos_df]
     train_df = pd.concat(np_df)
 
-
     # TRAINING PREPARATION
     # split into train and test sets with random seed 42
     
     x_train, x_val, y_train, y_val = train_test_split(
-        train_df['cleaned_review'], train_df['encoded_senti'], test_size=.1, stratify=train_df['sentiment'],
-        random_state=42
+        train_df['cleaned_review'], train_df['encoded_senti'], 
+        test_size=.1, stratify=train_df['sentiment'], random_state=42
     )
 
     _, x_test, _, y_test = train_test_split(
-        unseen_df['cleaned_review'], unseen_df['encoded_senti'], test_size=12836, stratify=unseen_df['sentiment'],
-        random_state=42
+        unseen_df['cleaned_review'], unseen_df['encoded_senti'], 
+        test_size=12836, stratify=unseen_df['sentiment'], random_state=42
     )
     
     '''
@@ -108,7 +108,7 @@ def train_model(filepath):
     model = Sequential(input_dim)
     criterion = nn.NLLLoss()
 
-    optimizer = optim.Adam(model.parameters(), lr=0.00075)
+    optimizer = optim.Adam(model.parameters(), lr=0.0008, weight_decay=0)
 
     train_losses = []
     val_losses = []
@@ -119,7 +119,7 @@ def train_model(filepath):
     start_time = time.time()
 
     # training and evaluation
-    epochs = 20
+    epochs = 15
     for e in range(epochs):
         model.train()
         optimizer.zero_grad()
@@ -215,7 +215,7 @@ def train_model(filepath):
         "model_type": "logistic_regression",
         "features": x_train.shape[1],
         "epochs": epochs,
-        "learning_rate": 0.00075,
+        "learning_rate": 0.0008,
         "train_loss": float(train_losses[-1]),
         "validation_loss": float(val_losses[-1]),
         "validation_accuracy": float(val_accuracies[-1]),
