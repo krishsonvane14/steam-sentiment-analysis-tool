@@ -1,5 +1,8 @@
 requests
 pandas
+python-dotenv
+openai
+json
 jsonlines
 scikit-learn
 torch
@@ -9,4 +12,3 @@ joblib
 fastapi
 uvicorn
 pydantic
-
