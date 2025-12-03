@@ -102,3 +102,33 @@ python ./logistic_model.py <input.csv>
 <img src="src/app/backend/linear_confusion_matrix.png" alt="Linear Confusion Matrix" width="500"/>
 
 </div>
+
+
+# GPT Sentiment Analyzer
+## Setup
+Because using any of the GPT models in an application context requires interfacing directly with OpenAI’s APIs, there is some setup required before any analysis can be done. The user must first create an OpenAI account. This gives access to OpenAI’s public AI tools such as ChatGPT and Sora but also to the OpenAI Platform which is the main developer portal for those wishing to utilize OpenAI’s services. 
+
+OpenAI, unlike some other LLM developers, does not provide a free tier of access to any of its GPT models, Access is billed based on input and output tokens, the model being queried and priority of access. It is necessary to create a billing plan on the OpenAI platform, adding a payment method and paying for credits to be added. Next, in the account API keys manager a new valid API key must be generated, with the private key saved locally. For security the private key is never included in the program code or entered by the user during runtime, instead is stored in a local `.env` file where the program can access it as an environment variable. A template `.env.example` is included to fill in.
+
+## Running the Program
+
+GPT Sentiment Analyzer can be run from the terminal emulator by navigating to the directory containing the script and entering `python GPT_sentiment_analyzer` the program has commands for its three modes of operation.
+
+`classify [filepath].csv` targets a csv with reviews’ text in a particular column and call the OpenAI response API to create a copy of the dataset  appended with additional columns for the text of the sentiment the model determined (negative or positive), the normalized numeric sentiment (0 or 1). There are five optional arguments for this command:
+
+* `--reviews_col [column]`: specifies the name of the column of reviews to classify, defaults to `“cleaned_review”`
+`reviews_sentiment_col [column]`: specifies the name of the column with the reviewer assigned numeric sentiment, not technically required for classification but needed for later evaluation, defaults to “encoded_senti”
+* `model [model name]`: the GPT model used for the classification, tested with `“gpt-5”`, `“gpt-5-mini”`, and `“gpt-5-nano”`, use of `“gpt-5-nano"` is recommended and this is the default
+* `limit [positive integer]`: classify up to the specified number of reviews in the dataset, defaults to none
+* `–o [newfilepath]`: save the csv with classifications and API info to the specified filepath, defaults to `[filepath]_[model]_sentiment.csv`
+
+
+`Evaluate [filepath]`: provides metrics and statistics on predicted sentiment classification of a dataset against actual sentiment. In the console it will display the confusion matrix, the classification report for the confusion matrix, and a statistics report on the API’s performance. These results are saved to descriptively named and timestamped files. If the dataset csv contains rows with undefined sentiment, these are dropped from the evaluation and included in a separate csv. There are three optional arguments:
+* `--by [column]`: splits the evaluation of rows to be grouped by the unique items in the specific `[column]`, useful if per genre or per game results are desired.  
+* `--actual_sentiment_col [column]`: 
+* `--predicted_sentiment_col [column]`:
+
+`Sample [filepath].csv`: randomly selects rows of a csv of reviews, useful if the existing dataset is large and classification of the entire set is infeasible or undesirable. There are three optional arguments:
+* `--size [positive integer]`: How many reviews to include in the sample, default is 100
+* `--random [positive integer]`: random seed for selection, default is 42
+* `--stratify [column]`: stratifies the sample so that for each unique label in `[column]` similar number of rows for each label will be included, no default
