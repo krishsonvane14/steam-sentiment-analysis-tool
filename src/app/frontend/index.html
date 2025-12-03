@@ -26,8 +26,8 @@
 
                 <tr>
                     <th>Data Split</th>
-                    <td>70% Training / 20% Validation / 10% Testing</td>
-                    <td>70% Training / 20% Validation / 10% Testing</td>
+                    <td>70% Training / 10% Validation / 20% Testing</td>
+                    <td>70% Training / 10% Validation / 20% Testing</td>
                 </tr>
 
                 <tr>
@@ -61,17 +61,17 @@
                 </tr>
 
                 <tr>
-                    <th>Training Loss</th>
+                    <th>Final Training Loss</th>
                     <td id="linear-tl"></td>
                     <td id="logistic-tl"></td>
                 </tr>
                 <tr>
-                    <th>Validation Loss</th>
+                    <th>Final Validation Loss</th>
                     <td id="linear-vl"></td>
                     <td id="logistic-vl"></td>
                 </tr>
                 <tr>
-                    <th>Validation Accuracy</th>
+                    <th>Final Validation Accuracy</th>
                     <td id="linear-va"></td>
                     <td id="logistic-va"></td>
                 </tr>
@@ -82,7 +82,7 @@
                 </tr>
 
                 <tr>
-                    <th>Loss over Epochs</th>
+                    <th>Training and Validation Loss over Epochs</th>
                     <td><img id="linear-loss"
                             src="http://localhost:8000/linear_loss_plot.png"
                             width="360"></td>
@@ -92,7 +92,7 @@
                 </tr>
 
                 <tr>
-                    <th>Accuracy over Epochs</th>
+                    <th>Validation Accuracy over Epochs</th>
                     <td><img id="linear-accuracy"
                             src="http://localhost:8000/linear_accuracy_plot.png"
                             width="360"></td>
@@ -111,16 +111,16 @@
                             width="360"></td>
                 </tr>
             </table>
-            <h1>Analyze Review</h1>
+            <h1>Analyze Sentiment</h1>
             <div class="single_review">
-                <h2>Classify One Review</h2>
+                <h2>Analyze One Review</h2>
                 <textarea id="single_input" placeholder="Enter a review..."
                     rows="4" cols="60"></textarea>
                 <br>
                 <button onclick="predictSentiment()">Analyze</button>
                 <p>
                     <strong>Result:</strong>
-                    <span id="single-result">Waiting...</span>
+                    <span id="single-result"></span>
                 </p>
             </div>
             <div class="appid_review">

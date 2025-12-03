@@ -12,7 +12,6 @@ backend_proc = subprocess.Popen(
 
 base_dir = os.path.dirname(__file__)
 frontend_folder = os.path.join(base_dir, "frontend")
-print("Contents:", os.listdir(frontend_folder))
 frontend_proc = subprocess.Popen(
     [sys.executable, "-m", "http.server", "5500"],
     cwd=frontend_folder 
