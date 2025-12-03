@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Steam Review Sentiment</title>
+        <link rel="stylesheet" href="style.css">
+        <script src="script.js"></script>
+
+    </head>
+
+    <div id="img-modal" class="modal">
+        <span class="modal-close">&times;</span>
+        <img class="modal-content" id="modal-img">
+    </div>
+
+    <body>
+        <h1>Steam Review Sentiment Tool</h1>
+        <div class="plots">
+            <h2>About our models</h2>
+            <table>
+                <tr>
+                    <th></th>
+                    <th>Linear Model</th>
+                    <th>Logistic Model</th>
+                </tr>
+
+                <tr>
+                    <th>Data Split</th>
+                    <td>70% Training / 10% Validation / 20% Testing</td>
+                    <td>70% Training / 10% Validation / 20% Testing</td>
+                </tr>
+
+                <tr>
+                    <th>Number of Features</th>
+                    <td id="linear-features"></td>
+                    <td id="logistic-features"></td>
+                </tr>
+
+                <tr>
+                    <th>Epochs</th>
+                    <td id="linear-epochs"></td>
+                    <td id="logistic-epochs"></td>
+                </tr>
+
+                <tr>
+                    <th>Loss Function</th>
+                    <td>NLLLoss</td>
+                    <td>BCELoss / BCEWithLogitsLoss</td>
+                </tr>
+
+                <tr>
+                    <th>Optimizer</th>
+                    <td>Adam</td>
+                    <td>Adam</td>
+                </tr>
+
+                <tr>
+                    <th>Learning Rate</th>
+                    <td id="linear-lr"></td>
+                    <td id="logistic-lr"></td>
+                </tr>
+
+                <tr>
+                    <th>Final Training Loss</th>
+                    <td id="linear-tl"></td>
+                    <td id="logistic-tl"></td>
+                </tr>
+                <tr>
+                    <th>Final Validation Loss</th>
+                    <td id="linear-vl"></td>
+                    <td id="logistic-vl"></td>
+                </tr>
+                <tr>
+                    <th>Final Validation Accuracy</th>
+                    <td id="linear-va"></td>
+                    <td id="logistic-va"></td>
+                </tr>
+                <tr>
+                    <th>Test Accuracy</th>
+                    <td id="linear-ta"></td>
+                    <td id="logistic-ta"></td>
+                </tr>
+
+                <tr>
+                    <th>Training and Validation Loss over Epochs</th>
+                    <td><img id="linear-loss"
+                            src="http://localhost:8000/linear_loss_plot.png"
+                            width="360"></td>
+                    <td><img id="logistic-loss"
+                            src="http://localhost:8000/logistic_loss_plot.png"
+                            width="360"></td>
+                </tr>
+
+                <tr>
+                    <th>Validation Accuracy over Epochs</th>
+                    <td><img id="linear-accuracy"
+                            src="http://localhost:8000/linear_accuracy_plot.png"
+                            width="360"></td>
+                    <td><img id="logistic-accuracy"
+                            src="http://localhost:8000/logistic_accuracy_plot.png"
+                            width="360"></td>
+                </tr>
+
+                <tr>
+                    <th>Confusion Matrix</th>
+                    <td><img id="linear-cm"
+                            src="http://localhost:8000/linear_confusion_matrix.png"
+                            width="360"></td>
+                    <td><img id="logistic-cm"
+                            src="http://localhost:8000/logistic_confusion_matrix.png"
+                            width="360"></td>
+                </tr>
+            </table>
+            <h1>Analyze Sentiment</h1>
+            <div class="single_review">
+                <h2>Analyze One Review</h2>
+                <textarea id="single_input" placeholder="Enter a review..."
+                    rows="4" cols="60"></textarea>
+                <br>
+                <button onclick="predictSentiment()">Analyze</button>
+                <p>
+                    <strong>Result:</strong>
+                    <span id="single-result"></span>
+                </p>
+            </div>
+            <div class="appid_review">
+                <h2>Analyse Reviews for a Steam App</h2>
+
+                <input id="appid-input" type="text"
+                    placeholder="Enter Steam AppID">
+                <br>
+
+                <button onclick="predictFromAppID()">Analyze</button>
+
+                <p><strong>Result:</strong></p>
+
+                <div id="appid-loading"></div>
+                <div id="appid-result"></div>
+            </div>
+        </div>
+
+    </body>
+</html>
